@@ -297,3 +297,42 @@ Both fixed in the zero-allocation audit commit before M4.
 - M5: When WorldEngine advances stages, PulseRenderer may gain stage-specific color evolution (warm white → soft violet → warm gold as stages progress). Deferred to M5.
 - M8 (Signature Moment): Cursor absorption happens at Stage 4→5 transition. PulseRenderer will spawn a unique inward-collapsing ring (inverse direction) at that moment.
 
+---
+
+## Milestone 4 — Behavior Engine
+
+**Status**: ✅ Complete
+**Date**: 2026-07-08
+
+### What was built
+
+- **TransitionRules.js** (full implementation):
+  - Transition logic evaluated every 5 seconds.
+  - Based on organic patterns: `trust`, `recentMatchRate`, and `idleSeconds`.
+  - Added robust transition paths avoiding dead ends (e.g. from DEFENSIVE, if user stays and proves consistency, it slowly opens to HESITANT).
+  - Universal OBSERVING trigger: 5% chance every 5 seconds (when in CALM or CURIOUS) to enter a state of complete stillness and silence.
+
+- **StateDefinitions.js** (finalized):
+  - Retained as the central architectural reference for state design intent.
+  - Defines the visual modifiers, pulse frequencies, and imperfection chances for: `CURIOUS`, `CALM`, `DEFENSIVE`, `HESITANT`, `TRUSTING`, and `OBSERVING`.
+
+- **Intentional Imperfections** (orchestrated):
+  - FSM transitions now actively change the current state in `PulseGenerator` (modulating pulse rate and timing variance) and `EntityAnimator` (modulating breathing, rotation, and visual hesitation).
+  - The entity feels alive because it hesitates randomly and modulates its behavior based on the visitor's patience and accuracy.
+
+### Visual verification
+
+- ✅ Entity actively changes pulse tempo based on behavior state.
+- ✅ Long periods of inactivity drive the entity into HESITANT, then DEFENSIVE.
+- ✅ Consecutive matches build trust and transition the entity into TRUSTING, increasing fluidity.
+- ✅ OBSERVING state correctly freezes the entity for 5 seconds before resuming its previous state.
+
+### Architecture decisions
+
+- **Patterns over single events**: Transitions evaluate trends (e.g., `recentMatchRate`), not just the last interaction. A single miss won't break trust, but a string of them will.
+- **Stateless logic evaluation**: `TransitionRules.js` is a pure function that evaluates a context object, making it highly testable and decoupled from the engine state.
+
+### Future notes
+
+- M5: WorldEngine will use the trust built in M4 to unlock world stages (Darkness → Pulse → Geometry → Light → Closest Glimpse).
+
