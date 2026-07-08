@@ -1,15 +1,23 @@
 /**
  * SPECIMEN — CoordinateSystem
  *
- * Maps between canvas CSS pixel space and normalized [-1, 1] space.
- * Keeps a consistent coordinate system regardless of screen size.
+ * Maps between two coordinate spaces:
  *
- * Normalized space:
- *   Center = (0, 0)
- *   Right   = +1 on the X axis (based on shorter dimension)
- *   Up      = -1 on the Y axis
+ *   World Space (normalized):
+ *     Center = (0, 0)
+ *     Horizontal range: -1 (left) to +1 (right)
+ *     Vertical range: -1 (top) to +1 (bottom)
+ *     Scale unit: based on the shorter screen dimension
  *
- * This ensures entity geometry is screen-size-agnostic.
+ *   Screen Space (CSS pixels):
+ *     Origin: top-left of the viewport
+ *     Units: CSS pixels (DPR scaling handled by Renderer)
+ *
+ * All entity geometry is authored in world space.
+ * The Renderer provides CSS pixel dimensions.
+ * This class handles all conversion — no raw pixel math anywhere else.
+ *
+ * Listens to EVENTS.RESIZE to stay current without polling.
  */
 
 import { EventBus } from '../utils/EventBus.js';
@@ -17,59 +25,126 @@ import { EVENTS } from '../constants.js';
 
 export class CoordinateSystem {
   constructor() {
-    /** @type {number} */
-    this.cssWidth = window.innerWidth;
-    /** @type {number} */
-    this.cssHeight = window.innerHeight;
-    /** @type {number} Shorter of width/height — used as the unit scale */
-    this.unit = Math.min(this.cssWidth, this.cssHeight);
+    /** @type {number} CSS pixel width */
+    this._cssWidth = window.innerWidth;
+
+    /** @type {number} CSS pixel height */
+    this._cssHeight = window.innerHeight;
+
+    /**
+     * The "unit" size in CSS pixels — half the shorter screen dimension.
+     * A world coordinate of 1.0 = this many pixels from center.
+     * @type {number}
+     */
+    this._halfUnit = Math.min(this._cssWidth, this._cssHeight) * 0.5;
+
+    /** @type {number} Pre-computed center X in CSS pixels */
+    this._centerX = this._cssWidth * 0.5;
+
+    /** @type {number} Pre-computed center Y in CSS pixels */
+    this._centerY = this._cssHeight * 0.5;
 
     EventBus.on(EVENTS.RESIZE, ({ cssWidth, cssHeight }) => {
-      this.cssWidth = cssWidth;
-      this.cssHeight = cssHeight;
-      this.unit = Math.min(cssWidth, cssHeight);
+      this._cssWidth  = cssWidth;
+      this._cssHeight = cssHeight;
+      this._halfUnit  = Math.min(cssWidth, cssHeight) * 0.5;
+      this._centerX   = cssWidth * 0.5;
+      this._centerY   = cssHeight * 0.5;
     });
   }
 
+  // ─── Core Conversions ─────────────────────────────────────────────────────
+
   /**
-   * Convert normalized [-1, 1] coordinates to CSS pixel coordinates.
-   * @param {number} nx — normalized x
-   * @param {number} ny — normalized y
+   * Convert world (normalized) coordinates to screen (CSS pixel) coordinates.
+   *
+   * @param {number} wx — World X [-1, 1]
+   * @param {number} wy — World Y [-1, 1]
+   * @returns {{ x: number, y: number }} Screen position in CSS pixels
+   */
+  worldToScreen(wx, wy) {
+    return {
+      x: this._centerX + wx * this._halfUnit,
+      y: this._centerY + wy * this._halfUnit,
+    };
+  }
+
+  /**
+   * Convert screen (CSS pixel) coordinates to world (normalized) coordinates.
+   *
+   * @param {number} sx — Screen X in CSS pixels
+   * @param {number} sy — Screen Y in CSS pixels
+   * @returns {{ wx: number, wy: number }} World position in [-1, 1] range
+   */
+  screenToWorld(sx, sy) {
+    return {
+      wx: (sx - this._centerX) / this._halfUnit,
+      wy: (sy - this._centerY) / this._halfUnit,
+    };
+  }
+
+  /**
+   * Convert a scalar size from world units to CSS pixels.
+   * Useful for radius values, line widths, etc.
+   *
+   * @param {number} worldSize — Size in world units
+   * @returns {number} Size in CSS pixels
+   */
+  worldSizeToPixels(worldSize) {
+    return worldSize * this._halfUnit;
+  }
+
+  /**
+   * Convert a scalar size from CSS pixels to world units.
+   *
+   * @param {number} pixelSize — Size in CSS pixels
+   * @returns {number} Size in world units
+   */
+  pixelSizeToWorld(pixelSize) {
+    return pixelSize / this._halfUnit;
+  }
+
+  // ─── Convenience ──────────────────────────────────────────────────────────
+
+  /**
+   * The canvas center in CSS pixel space.
    * @returns {{ x: number, y: number }}
    */
-  toPixel(nx, ny) {
-    return {
-      x: this.cssWidth / 2 + nx * (this.unit / 2),
-      y: this.cssHeight / 2 + ny * (this.unit / 2),
-    };
+  get center() {
+    return { x: this._centerX, y: this._centerY };
   }
 
+  /** @returns {number} CSS pixel width */
+  get cssWidth() { return this._cssWidth; }
+
+  /** @returns {number} CSS pixel height */
+  get cssHeight() { return this._cssHeight; }
+
+  /** @returns {number} World unit size in CSS pixels */
+  get halfUnit() { return this._halfUnit; }
+
+  // ─── Deprecated aliases (kept for stub compatibility) ─────────────────────
+
   /**
-   * Convert CSS pixel coordinates to normalized [-1, 1] coordinates.
-   * @param {number} px — pixel x
-   * @param {number} py — pixel y
-   * @returns {{ nx: number, ny: number }}
+   * @deprecated Use worldToScreen(wx, wy) instead.
+   * @param {number} nx
+   * @param {number} ny
+   */
+  toPixel(nx, ny) { return this.worldToScreen(nx, ny); }
+
+  /**
+   * @deprecated Use screenToWorld(sx, sy) instead.
+   * @param {number} px
+   * @param {number} py
    */
   toNormalized(px, py) {
-    return {
-      nx: (px - this.cssWidth / 2) / (this.unit / 2),
-      ny: (py - this.cssHeight / 2) / (this.unit / 2),
-    };
+    const { wx, wy } = this.screenToWorld(px, py);
+    return { nx: wx, ny: wy };
   }
 
   /**
-   * Scale a normalized size value to CSS pixels.
+   * @deprecated Use worldSizeToPixels(size) instead.
    * @param {number} normalizedSize
-   * @returns {number}
    */
-  toPixelSize(normalizedSize) {
-    return normalizedSize * (this.unit / 2);
-  }
-
-  /**
-   * @returns {{ cx: number, cy: number }} Canvas center in CSS pixels.
-   */
-  get center() {
-    return { cx: this.cssWidth / 2, cy: this.cssHeight / 2 };
-  }
+  toPixelSize(normalizedSize) { return this.worldSizeToPixels(normalizedSize); }
 }
