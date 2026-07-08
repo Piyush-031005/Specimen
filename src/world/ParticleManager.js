@@ -108,9 +108,17 @@ export class ParticleManager {
    * Finds the first inactive slot — O(n) worst case, fast in practice.
    * If no slot is available or limits are exceeded, silently skips.
    *
-   * @param {Partial<Particle>} props — Override default particle properties.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} vx
+   * @param {number} vy
+   * @param {number} radius
+   * @param {number} maxAge
+   * @param {number} r
+   * @param {number} g
+   * @param {number} b
    */
-  spawn(props) {
+  spawn(x, y, vx, vy, radius, maxAge, r, g, b) {
     if (this._activeCount >= this._stageLimit) return;
     if (this._activeCount >= this._hardLimit) return;
 
@@ -122,17 +130,17 @@ export class ParticleManager {
       if (!p.active) {
         // Reset to defaults, then apply props — no new object
         p.active  = true;
-        p.x       = props.x       ?? 0;
-        p.y       = props.y       ?? 0;
-        p.vx      = props.vx      ?? 0;
-        p.vy      = props.vy      ?? 0;
-        p.radius  = props.radius  ?? 2;
-        p.opacity = props.opacity ?? 1;
+        p.x       = x;
+        p.y       = y;
+        p.vx      = vx;
+        p.vy      = vy;
+        p.radius  = radius;
+        p.opacity = 1;
         p.age     = 0;
-        p.maxAge  = props.maxAge  ?? 2;
-        p.r       = props.r       ?? 255;
-        p.g       = props.g       ?? 255;
-        p.b       = props.b       ?? 255;
+        p.maxAge  = maxAge;
+        p.r       = r;
+        p.g       = g;
+        p.b       = b;
         return;
       }
     }
@@ -228,14 +236,14 @@ export class ParticleManager {
     const g = parseInt(hex.slice(3, 5), 16) || 255;
     const b = parseInt(hex.slice(5, 7), 16) || 255;
 
-    this.spawn({
+    this.spawn(
       x, y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      radius: Math.random() * 1.5 + 0.5,
-      maxAge: Math.random() * 4 + 2,
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed,
+      Math.random() * 1.5 + 0.5,
+      Math.random() * 4 + 2,
       r, g, b
-    });
+    );
   }
 
   /**

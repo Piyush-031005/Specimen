@@ -90,6 +90,13 @@ export class Renderer {
     // Bind once — never bind in the loop
     this._tick = this._tick.bind(this);
     this._onWindowResize = this._onWindowResize.bind(this);
+
+    /** @type {number} Current background luminosity [0, 1] */
+    this._bgLuminosity = 0;
+
+    EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stageDef }) => {
+      this._bgLuminosity = stageDef.backgroundLuminosity;
+    });
   }
 
   /**
@@ -173,8 +180,29 @@ export class Renderer {
     this._tickData.fps          = this._perf.fps;
     this._tickData.quality      = this._perf.quality;
 
-    // ── Clear canvas ──────────────────────────────────────────────────────
-    this._ctx.fillStyle = '#050505';
+    // ── Clear canvas & draw background gradient ───────────────────────────
+    const cx = this._tickData.cssWidth / 2;
+    const cy = this._tickData.cssHeight / 2;
+
+    if (this._bgLuminosity > 0) {
+      // Create a soft radial gradient for higher stages
+      const radius = Math.max(cx, cy) * 1.5;
+      const gradient = this._ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      
+      // Interpolate center color based on luminosity (dark to warm gold/white tint)
+      const l = this._bgLuminosity;
+      const r = Math.floor(5 + l * 40);
+      const g = Math.floor(5 + l * 35);
+      const b = Math.floor(5 + l * 25);
+      
+      gradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
+      gradient.addColorStop(1, '#050505'); // Edges remain pitch black
+      
+      this._ctx.fillStyle = gradient;
+    } else {
+      this._ctx.fillStyle = '#050505';
+    }
+    
     this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
 
     // ── Emit tick — all subscribers draw here ─────────────────────────────

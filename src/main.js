@@ -127,14 +127,17 @@ renderer.init();
 // 3. Behavior engine starts FSM
 behavior.init();
 
-// 4. Persist memory when visitor leaves
+// 4. World engine init (broadcasts starting stage)
+worldEngine.init();
+
+// 5. Persist memory when visitor leaves
 window.addEventListener('beforeunload', () => {
   memory.updateTrust(behavior.trust);
   memory.updateStage(worldEngine.stage);
   memory.save();
 });
 
-// 5. Start render loop — produces black screen at 60fps
+// 6. Start render loop — produces black screen at 60fps
 renderer.start();
 
 // 6. Entity intro — fades in over 2.4s (smootherstep) after 600ms silence

@@ -26,6 +26,13 @@ export class WorldEngine {
     });
   }
 
+  /**
+   * Initialize and broadcast the starting stage.
+   */
+  init() {
+    this._transition(this._stage);
+  }
+
   /** @returns {number} Current world stage */
   get stage() { return this._stage; }
 
@@ -46,7 +53,9 @@ export class WorldEngine {
 
     // Only advance — never skip backwards abruptly (trust decay is gradual)
     if (targetStage > this._stage) {
-      this._transition(targetStage);
+      // Advance exactly one stage at a time, even if trust spiked
+      // This ensures the visual progression is experienced sequentially
+      this._transition(this._stage + 1);
     }
   }
 
