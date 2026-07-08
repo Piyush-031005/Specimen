@@ -1,0 +1,17 @@
+# SPECIMEN — Git line ending normalization
+# Ensures consistent LF line endings across all platforms.
+
+* text=auto eol=lf
+
+# Explicitly binary — never touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
