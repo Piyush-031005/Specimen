@@ -213,6 +213,87 @@ Verified live in browser:
 
 ### Future notes
 
-- M2 (Entity Foundation): The entity will subscribe to `RENDER_TICK` and draw using the pre-allocated `ctx` from tick data.
-- M5 (World Progression): `ParticleManager.update()` will receive stage definition to control particle behavior (color, opacity curves, direction, etc.).
-- Consider adding a `DebugOverlay` (dev-only, stripped in production) to display FPS and particle count. Not in spec — only if needed for M5 tuning.
+- M3: PulseRenderer spawns pulse rings on ENTITY_PULSE_EMITTED. Match echo on COMMUNICATION_MATCH.
+- M5: ParticleManager update() receives current stage definition for per-stage visual behavior.
+
+---
+
+## Milestone 3 — Communication Engine
+
+**Status**: ✅ Complete
+**Date**: 2026-07-08
+
+### What was built
+
+- **PulseRenderer.js** (NEW):
+  - Pre-allocated pool of 8 PulseRing objects — flat array, zero allocations in update/render
+  - Entity pulses: warm white ring, expands from entity edge to 2.6x radius, 1.6s life
+  - Match echoes: electric blue ring, smaller (1.7x), faster (0.9s), on COMMUNICATION_MATCH
+  - Misses: NOTHING visual — silence is the response. Never punishes visitor.
+  - smootherstep easing on expansion — organic, not linear
+  - Opacity: fade-in over first 15% of life, then fade-out. Peak: 38% (entity) / 55% (echo)
+  - Pixel values cached and rebuilt on EVENTS.RESIZE
+
+- **PulseGenerator.js** (production rewrite):
+  - Non-deterministic by design: per-state [min, max] interval range
+  - 30% chance of hesitation variance: adds 150–900ms extra before pulsing
+  - CURIOUS: 1400-2200ms; CALM: 2800-4500ms; HESITANT: 3500-6500ms; TRUSTING: 1100-1900ms
+  - DEFENSIVE + OBSERVING: completely silent
+  - lastPulseTime getter exposed for RhythmMatcher consumption
+
+- **RhythmMatcher.js** (production rewrite):
+  - Zero setTimeout — window managed by `_windowOpenedAt` timestamp comparison
+  - Late responses (< 2x window): recorded as miss — visitor was trying
+  - Very late responses (> 2x window): silently ignored — visitor wasn't responding
+  - COMMUNICATION_FIRST_SUCCESS: emitted once, 200ms after first match settles
+  - consecutiveMisses tracked for entity behavioral nuance
+
+- **ToleranceSystem.js** (production):
+  - MAX_WINDOW_MS=700 at trust=0 → MIN_WINDOW_MS=200 at trust=100
+  - mapRange interpolation — progressive, never suddenly hard
+
+- **BehaviorEngine.js** (updated):
+  - COMMUNICATION_FIRST_SUCCESS: entity leans toward CURIOUS if CALM or HESITANT
+    Trust boost of MATCH_GAIN*2 — subtle, not dramatic
+  - _getRecentMatchRate(): replaced Array.filter allocation with manual loop
+
+- **main.js** (updated):
+  - PulseRenderer instantiated and self-wired (subscribes to RENDER_TICK internally)
+  - USER_PULSE_RESPONSE → memory.recordResponseTime() for rhythm fingerprint
+
+### Visual verification
+
+- ✅ Warm white pulse rings expand from entity edge on entity pulses
+- ✅ Blue echo rings appear on match (communication confirmed)
+- ✅ Misses: complete silence — no visual punishment
+- ✅ First success: entity visibly leans toward CURIOUS state
+- ✅ 28 modules, 0 errors, 99ms build
+
+### Problems encountered
+
+1. **`Array.filter(Boolean)` in BehaviorEngine hot path**: Called every 5s evaluation cycle. Replaced with manual loop — no allocation.
+
+2. **`Math.PI * 2` in organicSine and EntityAnimator**: organicSine called 5x/frame. Math.PI * 2 computed every call. Fixed with module-level `_TWO_PI`, `_FOUR_PI` constants.
+
+### Solutions
+
+Both fixed in the zero-allocation audit commit before M4.
+
+### Technical debt
+
+- `PulseGenerator` uses `setTimeout` for pulse scheduling. This is acceptable — pulse timing is not in the render hot path and doesn't cause frame drops.
+- `COMMUNICATION_FIRST_SUCCESS` uses a 200ms `setTimeout` for settling delay. Also acceptable — one-time event.
+- The match echo (blue ring) currently spawns at canvas center, not at drifted entity position. The drift is ±1.4% of screen — visually imperceptible. Will revisit in M9 polish if needed.
+
+### Architecture decisions
+
+- **Silence as failure feedback**: The most important UX decision of M3. When the visitor misses, they get nothing. No red flash, no error sound, no shake. The entity simply continues. This creates natural curiosity — "did I miss something? let me try again." Consistent with the project philosophy.
+- **PulseRenderer is independent of PulseGenerator**: Generator owns timing. Renderer owns visuals. Communicates via EventBus only. Perfectly modular.
+- **Two-threshold miss detection**: Responses within 2x the window are a "miss" (they tried). Beyond 2x — silently ignored (they weren't responding to that pulse). Prevents false punishment.
+
+### Future notes
+
+- M4: BehaviorEngine FSM transitions will visibly change pulse frequency through PulseGenerator's per-state params.
+- M5: When WorldEngine advances stages, PulseRenderer may gain stage-specific color evolution (warm white → soft violet → warm gold as stages progress). Deferred to M5.
+- M8 (Signature Moment): Cursor absorption happens at Stage 4→5 transition. PulseRenderer will spawn a unique inward-collapsing ring (inverse direction) at that moment.
+
