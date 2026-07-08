@@ -93,11 +93,11 @@ export class ParticleManager {
 
     EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stageDef }) => {
       this._stageLimit = stageDef.particleCount;
+      this._stageDef   = stageDef;
     });
 
     EventBus.on(EVENTS.RENDER_TICK, ({ ctx, deltaSeconds }) => {
-      this.update(deltaSeconds);
-      this.render(ctx);
+      this.update(deltaSeconds, ctx);
     });
   }
 
@@ -131,25 +131,36 @@ export class ParticleManager {
         p.age     = 0;
         p.maxAge  = props.maxAge  ?? 2;
         p.r       = props.r       ?? 255;
-        p.g       = props.g       ?? 240;
-        p.b       = props.b       ?? 232;
+        p.g       = props.g       ?? 255;
+        p.b       = props.b       ?? 255;
         return;
       }
     }
-    // Pool exhausted — skip gracefully
   }
 
   /**
-   * Update all active particles.
-   * Advances age, applies velocity, deactivates expired.
-   * No allocations.
-   *
+   * Update all active particles and maintain pool density.
    * @param {number} deltaSeconds
+   * @param {CanvasRenderingContext2D} ctx - to get canvas dimensions
    */
-  update(deltaSeconds) {
+  update(deltaSeconds, ctx) {
+    if (!this._stageDef) return;
+
+    // Spawn new particles to maintain stage limit
+    const spawnRate = this._stageDef.particleCount > 50 ? 3 : 1;
+    for (let i = 0; i < spawnRate; i++) {
+      if (this._activeCount < this._stageLimit && this._activeCount < this._hardLimit) {
+        this._spawnForCurrentStage(ctx.canvas.width, ctx.canvas.height);
+        this._activeCount++;
+      }
+    }
+
     let count = 0;
     const pool = this._pool;
     const len  = pool.length;
+    const motion = this._stageDef.particleMotion;
+    const cx = ctx.canvas.width / 2;
+    const cy = ctx.canvas.height / 2;
 
     for (let i = 0; i < len; i++) {
       const p = pool[i];
@@ -162,18 +173,69 @@ export class ParticleManager {
         continue;
       }
 
+      // Apply stage-specific motion
+      if (motion === 'inward') {
+        // Slowly drift toward center
+        const dx = cx - p.x;
+        const dy = cy - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        p.vx = (dx / dist) * this._stageDef.particleSpeed * 50;
+        p.vy = (dy / dist) * this._stageDef.particleSpeed * 50;
+      } else if (motion === 'orbital') {
+        // Spiral inward + rotate
+        const dx = cx - p.x;
+        const dy = cy - p.y;
+        const angle = Math.atan2(dy, dx);
+        p.vx = Math.cos(angle + 1.2) * this._stageDef.particleSpeed * 80;
+        p.vy = Math.sin(angle + 1.2) * this._stageDef.particleSpeed * 80;
+      } else if (motion === 'resonance') {
+        // Faster, erratic orbital
+        const dx = cx - p.x;
+        const dy = cy - p.y;
+        const angle = Math.atan2(dy, dx);
+        p.vx = Math.cos(angle + 1.4) * this._stageDef.particleSpeed * 120 + (Math.random() - 0.5) * 20;
+        p.vy = Math.sin(angle + 1.4) * this._stageDef.particleSpeed * 120 + (Math.random() - 0.5) * 20;
+      }
+
       // Apply velocity
       p.x += p.vx * deltaSeconds;
       p.y += p.vy * deltaSeconds;
 
-      // Opacity fade-out over lifetime (linear base — M5 will add curves)
+      // Opacity fade-out (sine curve for smooth in/out)
       const lifeProgress = p.age / p.maxAge;
-      p.opacity = 1 - lifeProgress;
+      p.opacity = Math.sin(lifeProgress * Math.PI) * this._stageDef.particleOpacityMax;
 
       count++;
     }
 
     this._activeCount = count;
+    this.render(ctx);
+  }
+
+  /**
+   * Helper to spawn a particle matching the current stage's visual profile.
+   * @private
+   */
+  _spawnForCurrentStage(w, h) {
+    const x = Math.random() * w;
+    const y = Math.random() * h;
+    const speed = this._stageDef.particleSpeed * (Math.random() * 20 + 5);
+    const angle = Math.random() * Math.PI * 2;
+    
+    // Parse hex color string to rgb
+    const hex = this._stageDef.particleColor;
+    const r = parseInt(hex.slice(1, 3), 16) || 255;
+    const g = parseInt(hex.slice(3, 5), 16) || 255;
+    const b = parseInt(hex.slice(5, 7), 16) || 255;
+
+    this.spawn({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: Math.random() * 1.5 + 0.5,
+      maxAge: Math.random() * 4 + 2,
+      r, g, b
+    });
   }
 
   /**
