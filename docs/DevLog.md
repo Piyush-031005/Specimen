@@ -336,3 +336,49 @@ Both fixed in the zero-allocation audit commit before M4.
 
 - M5: WorldEngine will use the trust built in M4 to unlock world stages (Darkness → Pulse → Geometry → Light → Closest Glimpse).
 
+---
+
+## Milestone 5 — World Progression Engine
+
+**Status**: ✅ Complete
+**Date**: 2026-07-08
+
+### What was built
+
+- **StageDefinitions.js**:
+  - Defined the 5 world stages: Darkness, Pulse, Geometry, Light, The Closest Glimpse.
+  - Mapped specific parameters to each stage: background luminosity, particle count, color, max opacity, motion type (`static`, `inward`, `orbital`, `resonance`), and base velocity multipliers.
+
+- **WorldEngine.js**:
+  - Listens to `BEHAVIOR_TRUST_UPDATED`.
+  - Ensures sequential stage progression: even if trust spikes, it only advances one stage per evaluation to preserve the visual journey.
+  - Broadcasts the initial stage on load via `worldEngine.init()`.
+
+- **ParticleManager.js**:
+  - Evolved from basic rendering into dynamic stage-driven generation.
+  - Re-engineered `spawn()` signature from taking an object payload to primitive arguments (`x`, `y`, `vx`, `vy`, etc.).
+  - **Zero Allocation Achieved**: Eradicated the `{...}` object allocation per spawn. The `update()` hot path generates particles, applies complex motion (inward vectors, spirals, resonance), and manages fading without a single heap allocation.
+  - Opacity fade-in/out now uses a sine wave (`Math.sin(lifeProgress * Math.PI)`) for an organic, breathing appearance.
+
+- **Renderer.js**:
+  - Connected to the `WORLD_STAGE_CHANGED` event to handle background luminosity.
+  - When luminosity > 0 (Stages 2+), renders a soft, dynamic radial gradient at the center that shifts from pitch black to a very subtle warm gold/white tint.
+
+### Visual verification
+
+- ✅ Stage 1: Completely black. Zero particles.
+- ✅ Stage 2: Small, static electric blue particles drift subtly in the background.
+- ✅ Stage 3: Soft violet particles flow inward toward the entity.
+- ✅ Stage 4: Warm gold particles spiral into elegant orbital paths; center background glows faintly.
+- ✅ Stage 5: Dense, fast, resonant swarm of white particles.
+- ✅ Zero console errors. Zero allocation dropouts. Stable 60fps.
+
+### Architecture decisions
+
+- **Decoupled Progression**: The visual engines (`ParticleManager`, `Renderer`) know nothing about trust or logic. They only listen to `WORLD_STAGE_CHANGED`. The FSM trust simply triggers the stage transition.
+- **Strict Primitive Parameters**: Refactoring `spawn()` to take primitives instead of objects is essential for the zero-allocation contract. Particle pools in JS must be flat data structures to avoid GC spikes over long sessions.
+
+### Future notes
+
+- M6: The audio engine will need to reflect these world stages (e.g., adding a sub-bass hum in Stage 3, and a choral resonance in Stage 5).
+- M7: The memory system will persist the achieved trust and stage. Return visitors should feel an immediate recognition from the entity (starting slightly warmer).
