@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050505" />
+    <title>SPECIMEN</title>
+    <meta name="description" content="An encounter with an unknown presence. Reality emerges through communication." />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=IBM+Plex+Mono:wght@300;400&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #050505;
+        font-family: 'Inter', system-ui, sans-serif;
+        color: #f5f0e8;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        /* Prevent cursor flash during signature moment */
+        cursor: none;
+        user-select: none;
+      }
+
+      #canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* Hint layer — invisible by default */
+      #hint-layer {
+        position: fixed;
+        bottom: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 300;
+        letter-spacing: 0.2em;
+        color: rgba(245, 240, 232, 0);
+        pointer-events: none;
+        transition: color 2s ease;
+        white-space: nowrap;
+      }
+
+      #hint-layer.visible {
+        color: rgba(245, 240, 232, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="hint-layer" aria-hidden="true">...</div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
