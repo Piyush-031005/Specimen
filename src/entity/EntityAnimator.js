@@ -32,6 +32,9 @@ import {
   randomFloat,
 } from '../utils/MathUtils.js';
 
+// Pre-computed — avoids Math.PI * 2 in the render hot path
+const TWO_PI = Math.PI * 2;
+
 // ─── Behavioral animation parameters per state ────────────────────────────────
 const STATE_ANIM_PARAMS = {
   [BEHAVIOR_STATES.CURIOUS]: {
@@ -162,8 +165,8 @@ export class EntityAnimator {
     this._state.innerRotation -= rotSpeed * deltaSeconds * 0.73; // Not same speed — offset rhythm
 
     // Keep rotations bounded to avoid float overflow over very long sessions
-    if (this._state.outerRotation > Math.PI * 2) this._state.outerRotation -= Math.PI * 2;
-    if (this._state.innerRotation < -Math.PI * 2) this._state.innerRotation += Math.PI * 2;
+    if (this._state.outerRotation > TWO_PI)  this._state.outerRotation -= TWO_PI;
+    if (this._state.innerRotation < -TWO_PI) this._state.innerRotation += TWO_PI;
 
     // ── Idle drift (slow 2D wander in world space) ─────────────────────────
     // Uses two independent organicSines on different phases for Lissajous-like paths.

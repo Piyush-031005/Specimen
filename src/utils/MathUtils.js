@@ -129,6 +129,10 @@ export function easeOut(t) {
   return 1 - Math.pow(1 - t, 3);
 }
 
+// Pre-computed — avoids repeated Math.PI multiplication in the render hot path
+const _TWO_PI  = Math.PI * 2;
+const _FOUR_PI = Math.PI * 4;
+
 /**
  * Organic sine pulse — not a perfect sine, has slight asymmetry.
  * Feels like a living breath cycle.
@@ -138,9 +142,9 @@ export function easeOut(t) {
  * @returns {number} — [-1, 1]
  */
 export function organicSine(t, frequency = 1, phase = 0) {
-  const base = Math.sin(t * frequency * Math.PI * 2 + phase);
-  // Add a subtle second harmonic to break perfect symmetry
-  const harmonic = Math.sin(t * frequency * Math.PI * 4 + phase * 1.3) * 0.08;
+  const base     = Math.sin(t * frequency * _TWO_PI + phase);
+  // Subtle second harmonic breaks perfect symmetry — feels alive
+  const harmonic = Math.sin(t * frequency * _FOUR_PI + phase * 1.3) * 0.08;
   return base + harmonic;
 }
 
