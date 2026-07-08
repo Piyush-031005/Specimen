@@ -2,20 +2,44 @@
  * SPECIMEN — Renderer
  *
  * The canvas engine. Owns the requestAnimationFrame loop.
+ *
  * Responsibilities:
- *   - Initialize and size the canvas (with devicePixelRatio support)
- *   - Run the render loop with accurate delta time
- *   - Handle resize events cleanly
- *   - Emit RENDER_TICK on every frame for all systems to consume
+ *   - Initialize and size the canvas (DPR-aware — retina support)
+ *   - Run the render loop with high-precision delta time
+ *   - Handle resize events without jank (rAF-debounced)
+ *   - Clear the canvas each frame
+ *   - Emit RENDER_TICK every frame for all systems to draw
  *   - Feed frame data to PerformanceMonitor
  *
- * Nothing is drawn here. Drawing is done by systems that
- * subscribe to RENDER_TICK and receive the canvas context.
+ * PERFORMANCE CONTRACT:
+ *   Zero heap allocations inside the render loop.
+ *   The tick data object is pre-allocated at construction and mutated in-place.
+ *   Subscribers of RENDER_TICK MUST NOT mutate the tick data object.
+ *
+ * Nothing is drawn here. All drawing happens in RENDER_TICK subscribers.
  */
 
 import { EventBus } from '../utils/EventBus.js';
 import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
 import { EVENTS } from '../constants.js';
+
+/** Maximum delta time spike to clamp (ms). Prevents jank after tab switches. */
+const MAX_DELTA_MS = 100;
+
+/**
+ * @typedef {Object} RenderTickData
+ * @property {CanvasRenderingContext2D} ctx
+ * @property {number} deltaMs
+ * @property {number} deltaSeconds
+ * @property {number} now
+ * @property {number} width      — Physical pixels
+ * @property {number} height     — Physical pixels
+ * @property {number} cssWidth   — CSS pixels (use for drawing)
+ * @property {number} cssHeight  — CSS pixels (use for drawing)
+ * @property {number} dpr
+ * @property {number} fps
+ * @property {string} quality    — 'full' | 'reduced'
+ */
 
 export class Renderer {
   /**
@@ -26,7 +50,10 @@ export class Renderer {
     this._canvas = canvas;
 
     /** @type {CanvasRenderingContext2D} */
-    this._ctx = canvas.getContext('2d', { alpha: false });
+    this._ctx = canvas.getContext('2d', {
+      alpha: false,         // Opaque canvas — no compositing cost
+      desynchronized: true, // Hint to browser: reduce latency where supported
+    });
 
     /** @type {PerformanceMonitor} */
     this._perf = new PerformanceMonitor();
@@ -40,31 +67,38 @@ export class Renderer {
     /** @type {boolean} */
     this._running = false;
 
-    /** @type {number} Physical pixel width */
-    this.width = 0;
+    /** @type {boolean} Resize pending flag — rAF debounce */
+    this._resizePending = false;
 
-    /** @type {number} Physical pixel height */
-    this.height = 0;
+    // ─── Pre-allocated tick data — NEVER reassigned, only mutated ───────────
+    // This is the core zero-allocation guarantee of the render loop.
+    /** @type {RenderTickData} */
+    this._tickData = {
+      ctx: this._ctx,
+      deltaMs: 0,
+      deltaSeconds: 0,
+      now: 0,
+      width: 0,
+      height: 0,
+      cssWidth: 0,
+      cssHeight: 0,
+      dpr: 1,
+      fps: 60,
+      quality: 'full',
+    };
 
-    /** @type {number} CSS pixel width */
-    this.cssWidth = 0;
-
-    /** @type {number} CSS pixel height */
-    this.cssHeight = 0;
-
-    /** @type {number} Device pixel ratio */
-    this.dpr = window.devicePixelRatio || 1;
-
-    this._onResize = this._onResize.bind(this);
+    // Bind once — never bind in the loop
     this._tick = this._tick.bind(this);
+    this._onWindowResize = this._onWindowResize.bind(this);
   }
 
   /**
-   * Initialize canvas sizing and start observing resize.
+   * Initialize canvas sizing and start listening for resize.
+   * Must be called before start().
    */
   init() {
-    this._resize();
-    window.addEventListener('resize', this._onResize, { passive: true });
+    this._applyResize();
+    window.addEventListener('resize', this._onWindowResize, { passive: true });
   }
 
   /**
@@ -78,7 +112,7 @@ export class Renderer {
   }
 
   /**
-   * Stop the render loop.
+   * Stop the render loop. Does not destroy the canvas.
    */
   stop() {
     this._running = false;
@@ -89,78 +123,105 @@ export class Renderer {
   }
 
   /**
-   * Tear down. Remove listeners. Stop loop.
+   * Full teardown. Removes listeners. Safe to call multiple times.
    */
   destroy() {
     this.stop();
-    window.removeEventListener('resize', this._onResize);
+    window.removeEventListener('resize', this._onWindowResize);
   }
+
+  // ─── Accessors ────────────────────────────────────────────────────────────
+
+  /** @returns {number} Current CSS width */
+  get cssWidth() { return this._tickData.cssWidth; }
+
+  /** @returns {number} Current CSS height */
+  get cssHeight() { return this._tickData.cssHeight; }
+
+  /** @returns {number} Device pixel ratio */
+  get dpr() { return this._tickData.dpr; }
 
   // ─── Private ──────────────────────────────────────────────────────────────
 
   /**
+   * Core render loop callback.
    * @private
-   * @param {number} now — DOMHighResTimeStamp from rAF
+   * @param {number} now — DOMHighResTimeStamp from requestAnimationFrame
    */
   _tick(now) {
     if (!this._running) return;
 
-    const deltaMs = now - this._lastTime;
+    // ── Delta time ────────────────────────────────────────────────────────
+    // Clamp to MAX_DELTA_MS to prevent massive deltas after tab switch / focus loss
+    const rawDelta = now - this._lastTime;
+    const deltaMs = rawDelta > MAX_DELTA_MS ? MAX_DELTA_MS : rawDelta;
     this._lastTime = now;
 
-    // Update performance monitor
+    // ── Performance sampling ──────────────────────────────────────────────
     this._perf.update(deltaMs, now);
 
-    // Clear canvas to background color
+    // ── Deferred resize ───────────────────────────────────────────────────
+    if (this._resizePending) {
+      this._resizePending = false;
+      this._applyResize();
+    }
+
+    // ── Mutate pre-allocated tick data (zero allocation) ─────────────────
+    this._tickData.deltaMs      = deltaMs;
+    this._tickData.deltaSeconds = deltaMs * 0.001; // Avoid division
+    this._tickData.now          = now;
+    this._tickData.fps          = this._perf.fps;
+    this._tickData.quality      = this._perf.quality;
+
+    // ── Clear canvas ──────────────────────────────────────────────────────
     this._ctx.fillStyle = '#050505';
-    this._ctx.fillRect(0, 0, this.width, this.height);
+    this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
 
-    // Emit tick — all render subscribers draw here
-    EventBus.emit(EVENTS.RENDER_TICK, {
-      ctx: this._ctx,
-      deltaMs,
-      deltaSeconds: deltaMs / 1000,
-      now,
-      width: this.width,
-      height: this.height,
-      cssWidth: this.cssWidth,
-      cssHeight: this.cssHeight,
-      dpr: this.dpr,
-      fps: this._perf.fps,
-      quality: this._perf.quality,
-    });
+    // ── Emit tick — all subscribers draw here ─────────────────────────────
+    EventBus.emit(EVENTS.RENDER_TICK, this._tickData);
 
+    // ── Schedule next frame ───────────────────────────────────────────────
     this._rafHandle = requestAnimationFrame(this._tick);
   }
 
-  /** @private */
-  _onResize() {
-    this._resize();
+  /**
+   * Called on window resize. Sets a flag — actual resize deferred to next rAF.
+   * Prevents dozens of canvas resizes per second during a drag-resize.
+   * @private
+   */
+  _onWindowResize() {
+    this._resizePending = true;
   }
 
-  /** @private */
-  _resize() {
-    const dpr = window.devicePixelRatio || 1;
-    this.dpr = dpr;
-    this.cssWidth = window.innerWidth;
-    this.cssHeight = window.innerHeight;
-    this.width = Math.round(this.cssWidth * dpr);
-    this.height = Math.round(this.cssHeight * dpr);
+  /**
+   * Apply the current window size to the canvas.
+   * Called once on init, then deferred via _resizePending flag.
+   * @private
+   */
+  _applyResize() {
+    const dpr       = window.devicePixelRatio || 1;
+    const cssWidth  = window.innerWidth;
+    const cssHeight = window.innerHeight;
+    const width     = Math.round(cssWidth * dpr);
+    const height    = Math.round(cssHeight * dpr);
 
-    this._canvas.width = this.width;
-    this._canvas.height = this.height;
-    this._canvas.style.width = `${this.cssWidth}px`;
-    this._canvas.style.height = `${this.cssHeight}px`;
+    this._canvas.width  = width;
+    this._canvas.height = height;
+    this._canvas.style.width  = `${cssWidth}px`;
+    this._canvas.style.height = `${cssHeight}px`;
 
-    // Scale context to match DPR — all drawing code uses CSS pixels
+    // Apply DPR transform once per resize — drawing code always uses CSS pixels
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // Update tick data dimensions (pre-allocated object)
+    this._tickData.dpr       = dpr;
+    this._tickData.width     = width;
+    this._tickData.height    = height;
+    this._tickData.cssWidth  = cssWidth;
+    this._tickData.cssHeight = cssHeight;
+
     EventBus.emit(EVENTS.RESIZE, {
-      width: this.width,
-      height: this.height,
-      cssWidth: this.cssWidth,
-      cssHeight: this.cssHeight,
-      dpr,
+      width, height, cssWidth, cssHeight, dpr,
     });
   }
 }
