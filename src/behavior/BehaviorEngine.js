@@ -24,7 +24,11 @@ const EVALUATION_INTERVAL_MS = 5000;  // How often to run transition checks
 const HISTORY_LENGTH = 10;            // Last N interactions for match rate
 
 export class BehaviorEngine {
-  constructor() {
+  /**
+   * @param {import('../memory/MemorySystem.js').MemorySystem} memory 
+   */
+  constructor(memory) {
+    this._memory = memory;
     /** @type {string} */
     this._state = BEHAVIOR_STATES.CALM;
 
@@ -68,9 +72,16 @@ export class BehaviorEngine {
 
   /** @private */
   _setupListeners() {
-    EventBus.on(EVENTS.COMMUNICATION_MATCH, () => {
+    EventBus.on(EVENTS.COMMUNICATION_MATCH, ({ responseTimeMs }) => {
       this._recordInteraction(true);
-      this._adjustTrust(TRUST.MATCH_GAIN);
+      
+      let gain = TRUST.MATCH_GAIN;
+      if (this._memory) {
+        const multiplier = this._memory.getFamiliarityMultiplier(responseTimeMs);
+        gain *= multiplier;
+      }
+      
+      this._adjustTrust(gain);
     });
 
     EventBus.on(EVENTS.COMMUNICATION_MISS, () => {
@@ -96,13 +107,8 @@ export class BehaviorEngine {
       }
     });
 
-    // Record response times for rhythm fingerprint (memory system)
-    EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs }) => {
-      EventBus.emit(EVENTS.MEMORY_LOADED); // Memory system listens for this
-      // We don't import MemorySystem here — BehaviorEngine re-emits
-      // so MemorySystem can subscribe directly in main.js wiring
-      this._lastResponseTimeMs = responseTimeMs;
-    });
+    // Record response times for rhythm fingerprint is handled in main.js
+    // BehaviorEngine doesn't need to do it.
   }
 
   /** @private */

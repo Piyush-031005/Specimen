@@ -92,7 +92,7 @@ export class RhythmMatcher {
     if (responseTimeMs > maxWindow) {
       // Only penalize if user actually tried to respond (within 2x window)
       if (responseTimeMs < maxWindow * 2) {
-        this._recordMiss();
+        this._recordMiss(responseTimeMs);
       }
       // After 2x window, we silently ignore — they weren't trying
       this._windowOpen = false;
@@ -110,6 +110,7 @@ export class RhythmMatcher {
 
     // Record response time for memory / rhythm fingerprint
     EventBus.emit(EVENTS.USER_PULSE_RESPONSE, {
+      success: true,
       responseTimeMs,
       timestamp: now,
     });
@@ -129,12 +130,21 @@ export class RhythmMatcher {
   /**
    * Record a miss — visitor responded but outside the tolerance window.
    * @private
+   * @param {number} responseTimeMs
    */
-  _recordMiss() {
+  _recordMiss(responseTimeMs) {
     this._consecutiveMisses++;
+    const now = performance.now();
+    
     EventBus.emit(EVENTS.COMMUNICATION_MISS, {
       consecutiveMisses: this._consecutiveMisses,
-      timestamp:         performance.now(),
+      timestamp:         now,
+    });
+
+    EventBus.emit(EVENTS.USER_PULSE_RESPONSE, {
+      success: false,
+      responseTimeMs,
+      timestamp: now,
     });
   }
 }

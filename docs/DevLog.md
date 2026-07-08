@@ -415,3 +415,33 @@ Both fixed in the zero-allocation audit commit before M4.
 ### Future notes
 
 - M7: Memory system will persist trust across sessions. Return visitors will jump back into higher audio/visual stages instantly, making the experience feel truly alive and aware.
+
+---
+
+## Milestone 7 — Memory Engine
+
+**Status**: ✅ Complete
+**Date**: 2026-07-08
+
+### What was built
+
+- **SessionData.js**:
+  - Replaced basic average tracking with a full `RhythmFingerprint` schema.
+  - Now stores `avgTempoMs`, `varianceMs`, and interaction counts to build a behavioral profile.
+
+- **MemorySystem.js**:
+  - Implemented real-world time decay (`calculateReturningTrust`). A visitor returning after 1 hour retains ~90% trust. After 24 hours, ~40%. After 7 days, ~10%. Trust never starts above 40 (must re-earn higher stages).
+  - Implemented recognition mechanics (`getFamiliarityMultiplier`). If a visitor interacts with a timing that matches their historical variance, trust gains are multiplied (up to 1.3x) because the entity "recognizes" them.
+
+- **BehaviorEngine.js & main.js**:
+  - Wired to use the real-world decay upon startup.
+  - Wired to apply the familiarity multiplier during `COMMUNICATION_MATCH` events.
+
+### Architecture decisions
+
+- **Zero UI Recognition**: The most important rule for M7 was "never tell the visitor they are recognized." There is no "Welcome Back" text. The recognition is purely behavioral—they build trust slightly faster if they act like themselves, and they start slightly warmer depending on how long they were gone.
+- **Math over Mechanics**: Rather than adding new features for returning users, we simply modulate the existing FSM using statistical variance against their historical rhythm footprint.
+
+### Future notes
+
+- M8: The Signature Moment. The cursor will be absorbed by the entity upon reaching peak trust, breaking the boundary between visitor and website.

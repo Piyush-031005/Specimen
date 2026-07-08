@@ -12,17 +12,17 @@
 
 import { EventBus } from '../utils/EventBus.js';
 import { EVENTS } from '../constants.js';
-import { DEFAULT_SESSION_DATA, classifyRhythmStyle } from './SessionData.js';
+import { DEFAULT_SESSION_DATA } from './SessionData.js';
 
 const STORAGE_KEY = 'specimen_memory';
 
 export class MemorySystem {
   constructor() {
     /** @type {import('./SessionData.js').SessionData} */
-    this._data = { ...DEFAULT_SESSION_DATA };
+    this._data = JSON.parse(JSON.stringify(DEFAULT_SESSION_DATA)); // Deep clone
 
-    /** @type {number[]} Accumulating response times this session */
-    this._responseTimes = [];
+    /** @type {number[]} Accumulating response times this session for variance calc */
+    this._recentResponseTimes = [];
   }
 
   /**
@@ -34,15 +34,22 @@ export class MemorySystem {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        this._data = { ...DEFAULT_SESSION_DATA, ...parsed };
+        // Deep merge to preserve structure
+        this._data = { 
+          ...JSON.parse(JSON.stringify(DEFAULT_SESSION_DATA)), 
+          ...parsed,
+          fingerprint: {
+            ...DEFAULT_SESSION_DATA.fingerprint,
+            ...(parsed.fingerprint || {})
+          }
+        };
       }
     } catch {
-      this._data = { ...DEFAULT_SESSION_DATA };
+      this._data = JSON.parse(JSON.stringify(DEFAULT_SESSION_DATA));
     }
 
     this._data.sessionCount += 1;
-    this._data.lastVisitTimestamp = Date.now();
-
+    
     EventBus.emit(EVENTS.MEMORY_LOADED, { data: this._data });
     return this._data;
   }
@@ -51,6 +58,7 @@ export class MemorySystem {
    * Save current session state to storage.
    */
   save() {
+    this._data.lastVisitTimestamp = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this._data));
       EventBus.emit(EVENTS.MEMORY_SAVED, { data: this._data });
@@ -76,14 +84,78 @@ export class MemorySystem {
   }
 
   /**
-   * Record a response time to build the rhythm fingerprint.
-   * @param {number} responseTimeMs
+   * Record an interaction to build the rhythm fingerprint.
+   * @param {boolean} isMatch 
+   * @param {number} responseTimeMs - only provided if isMatch is true
    */
-  recordResponseTime(responseTimeMs) {
-    this._responseTimes.push(responseTimeMs);
-    const avg = this._responseTimes.reduce((a, b) => a + b, 0) / this._responseTimes.length;
-    this._data.avgResponseTimeMs = avg;
-    this._data.rhythmStyle = classifyRhythmStyle(avg);
+  recordInteraction(isMatch, responseTimeMs = 0) {
+    const fp = this._data.fingerprint;
+    fp.totalAttempts += 1;
+
+    if (isMatch) {
+      fp.matches += 1;
+      this._recentResponseTimes.push(responseTimeMs);
+      
+      // Calculate running average
+      fp.avgTempoMs = ((fp.avgTempoMs * (fp.matches - 1)) + responseTimeMs) / fp.matches;
+
+      // Calculate variance (average deviation from the mean)
+      let sumDeviation = 0;
+      for (const t of this._recentResponseTimes) {
+        sumDeviation += Math.abs(t - fp.avgTempoMs);
+      }
+      fp.varianceMs = sumDeviation / this._recentResponseTimes.length;
+      
+      // Keep recent array bounded
+      if (this._recentResponseTimes.length > 50) {
+        this._recentResponseTimes.shift();
+      }
+    }
+  }
+
+  /**
+   * Calculates the starting trust for a return visitor based on time away.
+   * Real-world time decay: shorter absence = higher retention.
+   * @returns {number}
+   */
+  calculateReturningTrust() {
+    if (this._data.sessionCount <= 1 || this._data.lastVisitTimestamp === 0) return 0;
+    
+    const timeAwayMs = Date.now() - this._data.lastVisitTimestamp;
+    const hoursAway = timeAwayMs / (1000 * 60 * 60);
+    
+    // Decay curve: 
+    // 1 hour away = keeps ~90% of trust
+    // 24 hours away = keeps ~40% of trust
+    // 7 days away = keeps ~10% of trust
+    const retentionFactor = Math.max(0.1, Math.exp(-hoursAway / 24));
+    
+    // Maximum starting trust is capped at 40 (must re-earn higher stages)
+    return Math.min(this._data.trust * retentionFactor, 40);
+  }
+
+  /**
+   * If the visitor interacts with a similar rhythm to their past sessions,
+   * they are "recognized", giving a slight boost to trust gains.
+   * @param {number} currentResponseMs 
+   * @returns {number} Multiplier (e.g. 1.0 to 1.5)
+   */
+  getFamiliarityMultiplier(currentResponseMs) {
+    const fp = this._data.fingerprint;
+    // Must have a meaningful fingerprint established
+    if (fp.matches < 10 || fp.avgTempoMs === 0) return 1.0;
+
+    // Check if their current timing falls within their historical variance
+    const deviation = Math.abs(currentResponseMs - fp.avgTempoMs);
+    
+    // If they are within 1.5x of their normal variance, they are recognized
+    if (deviation <= fp.varianceMs * 1.5) {
+      // The tighter the variance, the stronger the recognition, up to +30% boost
+      const accuracy = 1 - (deviation / (fp.varianceMs * 1.5));
+      return 1.0 + (0.3 * accuracy); 
+    }
+
+    return 1.0; // Stranger rhythm
   }
 
   /** @returns {import('./SessionData.js').SessionData} */

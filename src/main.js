@@ -55,7 +55,7 @@ const tolerance     = new ToleranceSystem();
 const pulseGen      = new PulseGenerator();
 const pulseRenderer = new PulseRenderer(coords);   // eslint-disable-line no-unused-vars
 const rhythmMatcher = new RhythmMatcher(tolerance); // eslint-disable-line no-unused-vars
-const behavior      = new BehaviorEngine();
+const behavior      = new BehaviorEngine(memory);
 const audio         = new AudioEngine();
 const entity        = new Entity(coords, scheduler);
 const hint          = new HintLayer(hintEl);
@@ -137,15 +137,18 @@ hint.start();
 
 // 9. Wire response time recording to MemorySystem
 // MemorySystem records visitor's rhythm fingerprint for return visits
-EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs }) => {
-  memory.recordResponseTime(responseTimeMs);
+EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs, success }) => {
+  memory.recordInteraction(success, responseTimeMs);
 });
 
 // ─── Return visitor behavior ──────────────────────────────────────────────────
 // If this is not the first visit, seed trust from memory.
-// The entity will already be in a slightly warmer state.
-if (memory.isReturnVisitor && sessionData.trust > 10) {
-  EventBus.emit(EVENTS.BEHAVIOR_TRUST_UPDATED, {
-    trust: Math.min(sessionData.trust * 0.6, 40), // Partial — must re-earn
-  });
+// The entity will already be in a slightly warmer state, calculated via real-time decay.
+if (memory.isReturnVisitor && sessionData.trust > 0) {
+  const retainedTrust = memory.calculateReturningTrust();
+  if (retainedTrust > 5) {
+    EventBus.emit(EVENTS.BEHAVIOR_TRUST_UPDATED, {
+      trust: retainedTrust, 
+    });
+  }
 }
