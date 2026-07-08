@@ -128,6 +128,87 @@ N/A
 
 - **Pre-allocated tick data**: This is a hard invariant from this point forward. No subscriber of `RENDER_TICK` should assume they can mutate the tick data object.
 - **Particle pool size 512**: Generous enough for all 5 world stages. Reduced to 128 on quality downgrade.
+- **Resize via rAF debounce**: Defer actual resize until next animation frame — prevents canvas resize flood on drag-resize.
+
+### Future notes
+
+- M2: Entity subscribes to RENDER_TICK. Geometry draws at entity's drifted world position.
+- M5: ParticleManager update() receives current stage definition for per-stage visual behavior.
+
+---
+
+## Milestone 2 — Entity Foundation
+
+**Status**: ✅ Complete
+**Date**: 2026-07-08
+
+### What was built
+
+- **Geometry.js** (full implementation):
+  - The ONE iconic geometry: Merkaba form (sacred geometry / Metatron's Cube inspired)
+  - Structure: outer ring → outer triangle (CW) → inner triangle (CCW) →
+    mid ring (electric blue) → 6 inner spokes (impossible intersections) →
+    core ring + dot (soft violet)
+  - Module-level constants TWO_PI, PI_OVER_3 (no Math.PI * 2 per frame)
+  - All radii cached in `_rebuildCache()` — only recomputed on resize
+  - Pure draw function — no state, no animation logic inside Geometry
+
+- **EntityAnimator.js** (full implementation):
+  - Organic breathing via `organicSine()` — asymmetric waveform, random phase offset
+  - Counter-rotation: outer CW, inner CCW at 0.73x (offset rhythm)
+  - `valueNoise2D()` perturbation on rotation rate — never a steady clock
+  - Idle drift via two independent `organicSine()` with Lissajous-like paths
+  - `expDecay()` smoothing on drift position — no snapping
+  - **Intentional imperfection**: random hesitation events slow rotation to 15% for 0.3–1.1s
+  - Per-state animation params (breathSpeed, amplitude, rotationSpeed, driftScale, hesitationChance)
+  - Params smoothly lerp toward target when behavior state changes
+
+- **Entity.js** (full implementation):
+  - Shares mutable EntityState with EntityAnimator
+  - Fade-in intro: opacity 0 → 1 over 2400ms, smootherstep, 600ms delay
+  - Cursor lean: in CURIOUS state, drifts 6% toward cursor world position
+  - Translates canvas context to drifted world position for each draw call
+  - Rebuilds geometry cache on resize
+
+### Visual verification
+
+Verified live in browser:
+- ✅ Merkaba symbol renders correctly (outer ring, two triangles, mid ring, spokes, core)
+- ✅ Counter-rotation at offset speeds — never robotic
+- ✅ Organic breathing scale — subtle, asymmetric
+- ✅ Lissajous idle drift — entity wanders, never repeats exactly
+- ✅ Smooth fade-in over 2.4 seconds
+- ✅ Zero console errors
+
+### Problems encountered
+
+1. **Entity constructor signature**: M0 stub took only `coords`. M2 added `scheduler` for fade-in animation. Required `main.js` update.
+
+2. **Context translation for drift**: Geometry renders relative to a fixed center point. To apply drift, the canvas context is temporarily translated by the world-to-screen offset. Slight overhead but clean separation — Geometry stays pure.
+
+### Solutions
+
+1. Added `scheduler` as second parameter to Entity constructor.
+
+2. Save/translate/draw/restore pattern in `_onTick()`. Only triggered when drift offset is non-zero (check added to skip unnecessary save/restore).
+
+### Technical debt
+
+- Geometry `render()` opens a `ctx.save()/restore()` block plus additional state changes per layer. Total save/restore per frame: 2 (Entity + Geometry). Acceptable for now. Could consolidate in M9 polish.
+- The `hesitationChance` parameter is per-frame at 60fps. At 30fps it fires half as often — slightly different feel. Acceptable until M9 polish.
+
+### Architecture decisions
+
+- **EntityState as shared reference**: Both Entity and EntityAnimator hold the same object reference. Animator writes to it; Entity reads from it at render time. Clean data flow, no events for per-frame values.
+- **Geometry is stateless**: All animation state lives in EntityAnimator. Geometry is a pure renderer — testable, replaceable, zero side effects.
+- **Merkaba form as identity**: This geometry is locked permanently. No random shape generation. The entity IS the Merkaba. Its identity comes from behavior, not from shape variation.
+
+### Future notes
+
+- M3: `PulseGenerator` emits visual pulse ring from entity position. Geometry remains unchanged — pulse is a separate visual layer.
+- M4: Behavior state changes will visibly affect entity animation speed/amplitude through EntityAnimator's per-state params.
+- M9 polish: Consider adding a very faint glow (~3px blur, 20% opacity) on the core ring only for Stage 4+ world.
+
 - **Resize via rAF debounce**: Window resize events fire extremely rapidly. Deferring the actual resize to the next animation frame prevents dozens of canvas resizes per second.
 
 ### Future notes
