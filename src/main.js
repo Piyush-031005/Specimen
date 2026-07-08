@@ -64,12 +64,8 @@ const hint          = new HintLayer(hintEl);
 /**
  * Single unified input handler.
  * Maps: click, spacebar, touch → USER_INPUT event.
- * Audio context is resumed on first gesture (browser policy).
  */
 function handleUserGesture(event) {
-  // Resume audio context on first interaction
-  audio.resume();
-
   // Normalize event position
   let x = 0;
   let y = 0;
@@ -90,26 +86,13 @@ function handleUserGesture(event) {
   });
 }
 
-/**
- * Audio init requires a user gesture — init on first interaction.
- */
-let audioInitialized = false;
-function handleFirstGesture(event) {
-  if (!audioInitialized) {
-    audioInitialized = true;
-    audio.init();
-  }
-  handleUserGesture(event);
-}
-
-window.addEventListener('click', handleFirstGesture, { passive: true });
+window.addEventListener('pointerdown', handleUserGesture, { passive: true });
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
-    handleFirstGesture(e);
+    handleUserGesture(e);
   }
 }, { passive: false });
-window.addEventListener('touchstart', handleFirstGesture, { passive: true });
 
 // ─── Custom Cursor ────────────────────────────────────────────────────────────
 // Cursor is hidden globally via CSS (cursor:none on body).
@@ -129,6 +112,9 @@ behavior.init();
 
 // 4. World engine init (broadcasts starting stage)
 worldEngine.init();
+
+// 5. Audio engine init (attaches strict pointerdown unlock listener)
+audio.init();
 
 // 5. Persist memory when visitor leaves
 window.addEventListener('beforeunload', () => {

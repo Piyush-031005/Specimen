@@ -1,93 +1,88 @@
 /**
  * SPECIMEN — AudioEngine
  *
- * Procedural audio. No files. No music. Everything generated.
+ * Orchestrates the synthesized audio experience.
  *
- * Audio Rule: Silence first. Let silence establish the room.
- * First sound plays after TIMING.AUDIO_SILENCE_BEFORE_FIRST_PULSE_MS.
- *
- * ⚠️  Stub: Full implementation in Milestone 7 (Audio Engine).
+ * Rules:
+ * - STRICT UNLOCK: AudioContext must ONLY unlock on the first deliberate click/tap.
+ * - Subscribes to FSM and World Engine events to modulate the audio organically.
  */
 
 import { EventBus } from '../utils/EventBus.js';
-import { EVENTS, TIMING } from '../constants.js';
+import { EVENTS } from '../constants.js';
+import { PulseSynth } from './PulseSynth.js';
+import { AtmosphereSynth } from './AtmosphereSynth.js';
 
 export class AudioEngine {
   constructor() {
-    /** @type {AudioContext|null} */
-    this._ctx = null;
+    this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Master compressor to prevent clipping
+    this._compressor = this._ctx.createDynamicsCompressor();
+    this._compressor.connect(this._ctx.destination);
+    
+    // Synths
+    this._pulseSynth = new PulseSynth(this._ctx, this._compressor);
+    this._atmosphereSynth = new AtmosphereSynth(this._ctx, this._compressor);
 
-    /** @type {GainNode|null} Master gain */
-    this._masterGain = null;
+    this._unlocked = false;
+    this._currentTrust = 0;
 
-    /** @type {boolean} */
-    this._initialized = false;
-
-    /** @type {boolean} Ready to play (silence period has passed) */
-    this._silenceComplete = false;
-
-    this._setupListeners();
+    // We must listen for interaction to unlock audio
+    this._unlockHandler = this._unlock.bind(this);
   }
 
   /**
-   * Initialize the AudioContext.
-   * Must be called from a user gesture (click/keypress) due to browser policy.
+   * Bind event listeners for the engine and the document for unlocking.
    */
   init() {
-    if (this._initialized) return;
+    document.addEventListener('pointerdown', this._unlockHandler, { once: true });
+    
+    EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state, trust }) => {
+      this._currentTrust = trust;
+      this._pulseSynth.updateParameters(state, trust);
+    });
 
-    this._ctx = new AudioContext();
-    this._masterGain = this._ctx.createGain();
-    this._masterGain.gain.setValueAtTime(0.7, this._ctx.currentTime);
-    this._masterGain.connect(this._ctx.destination);
+    EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stage }) => {
+      this._atmosphereSynth.setStage(stage);
+    });
 
-    this._initialized = true;
-
-    // Enforce silence before first sound
-    setTimeout(() => {
-      this._silenceComplete = true;
-    }, TIMING.AUDIO_SILENCE_BEFORE_FIRST_PULSE_MS);
-  }
-
-  /**
-   * Resume AudioContext if it was suspended (browser autoplay policy).
-   */
-  async resume() {
-    if (this._ctx && this._ctx.state === 'suspended') {
-      await this._ctx.resume();
-    }
-  }
-
-  /** @private */
-  _setupListeners() {
     EventBus.on(EVENTS.AUDIO_PULSE_TRIGGER, () => {
-      if (!this._silenceComplete) return;
-      this._playPulse();
+      this._pulseSynth.play(false);
     });
 
     EventBus.on(EVENTS.AUDIO_MATCH_TRIGGER, () => {
-      if (!this._silenceComplete) return;
-      this._playMatch();
+      this._pulseSynth.play(true);
     });
-
+    
+    // In Observing state, silence the audio
     EventBus.on(EVENTS.AUDIO_OBSERVING_START, () => {
-      this._fadeToSilence();
+      // The atmosphere crossfades to silence
+      this._atmosphereSynth.setStage(0); 
     });
-
+    
     EventBus.on(EVENTS.AUDIO_OBSERVING_END, () => {
-      this._fadeIn();
+      // Audio will naturally resume when the world stage gets broadcasted next, 
+      // or we can let the behavior engine trigger the state update.
     });
   }
 
-  /** @private — Milestone 7 */
-  _playPulse() {}
-
-  /** @private — Milestone 7 */
-  _playMatch() {}
-
-  /** @private — Milestone 7 */
-  _fadeToSilence() {}
-
-  /** @private — Milestone 7 */
-  _fadeIn() {}
+  /**
+   * Unlocks the AudioContext. Only fires once on deliberate pointerdown.
+   * @private
+   */
+  _unlock() {
+    if (this._unlocked) return;
+    
+    if (this._ctx.state === 'suspended') {
+      this._ctx.resume().then(() => {
+        this._unlocked = true;
+        this._atmosphereSynth.start();
+        console.log('AudioContext unlocked.');
+      });
+    } else {
+      this._unlocked = true;
+      this._atmosphereSynth.start();
+    }
+  }
 }
