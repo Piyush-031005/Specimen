@@ -83,11 +83,11 @@ export const STAGE_DEFINITIONS = Object.freeze([
     name: 'The Closest Glimpse',
     trustThreshold: TRUST.STAGE_THRESHOLDS[4],
     backgroundLuminosity: 0.25,
-    particleCount: 350,
-    particleColor: COLORS.WARM_WHITE,
+    particleCount: 400,
+    particleColor: '#F5F0E8', // Slightly warm white
     particleOpacityMax: 0.5,
     particleMotion: 'resonance',
-    particleSpeed: 0.7,
+    particleSpeed: 0.3, // Slower, calmer, more synchronized
     geometryBackground: true,
   },
 ]);

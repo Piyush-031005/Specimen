@@ -197,12 +197,13 @@ export class ParticleManager {
         p.vx = Math.cos(angle + 1.2) * this._stageDef.particleSpeed * 80;
         p.vy = Math.sin(angle + 1.2) * this._stageDef.particleSpeed * 80;
       } else if (motion === 'resonance') {
-        // Faster, erratic orbital
+        // Calm, highly synchronized, slow orbital flow (no jitter)
         const dx = cx - p.x;
         const dy = cy - p.y;
         const angle = Math.atan2(dy, dx);
-        p.vx = Math.cos(angle + 1.4) * this._stageDef.particleSpeed * 120 + (Math.random() - 0.5) * 20;
-        p.vy = Math.sin(angle + 1.4) * this._stageDef.particleSpeed * 120 + (Math.random() - 0.5) * 20;
+        // Tighter orbit angle, slower speed multiplier for peace
+        p.vx = Math.cos(angle + 1.5) * this._stageDef.particleSpeed * 60;
+        p.vy = Math.sin(angle + 1.5) * this._stageDef.particleSpeed * 60;
       }
 
       // Apply velocity
