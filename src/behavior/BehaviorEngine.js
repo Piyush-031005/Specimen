@@ -7,10 +7,12 @@
  *   - Current state + transitions
  *   - Trust accumulation and decay
  *   - Recent interaction history (for match rate calculation)
- *   - Observing state timer
- *   - Emitting BEHAVIOR_STATE_CHANGED and BEHAVIOR_TRUST_UPDATED events
+ *   - COMMUNICATION_FIRST_SUCCESS handling (subtle warm-up reaction)
+ *   - Observing state timer (transient 5s silence)
+ *   - Emitting BEHAVIOR_STATE_CHANGED and BEHAVIOR_TRUST_UPDATED
  *
- * ⚠️  Stub: Full FSM implementation in Milestone 4.
+ * Full FSM with transition evaluation active from M3 forward.
+ * M4 refines transition rules and adds intentional imperfections.
  */
 
 import { EventBus } from '../utils/EventBus.js';
@@ -79,6 +81,28 @@ export class BehaviorEngine {
     EventBus.on(EVENTS.USER_INPUT, () => {
       this._idleSeconds = 0;
     });
+
+    // First communication success — entity notices.
+    // Subtle reaction: push toward CURIOUS state if currently CALM or HESITANT.
+    // No fanfare. No dramatic shift. Just a small lean toward curiosity.
+    EventBus.on(EVENTS.COMMUNICATION_FIRST_SUCCESS, () => {
+      if (
+        this._state === BEHAVIOR_STATES.CALM ||
+        this._state === BEHAVIOR_STATES.HESITANT
+      ) {
+        // Small trust boost — enough to nudge the entity's demeanor
+        this._adjustTrust(TRUST.MATCH_GAIN * 2);
+        this._transition(BEHAVIOR_STATES.CURIOUS);
+      }
+    });
+
+    // Record response times for rhythm fingerprint (memory system)
+    EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs }) => {
+      EventBus.emit(EVENTS.MEMORY_LOADED); // Memory system listens for this
+      // We don't import MemorySystem here — BehaviorEngine re-emits
+      // so MemorySystem can subscribe directly in main.js wiring
+      this._lastResponseTimeMs = responseTimeMs;
+    });
   }
 
   /** @private */
@@ -98,7 +122,12 @@ export class BehaviorEngine {
   /** @private */
   _getRecentMatchRate() {
     if (this._history.length === 0) return 0.5;
-    return this._history.filter(Boolean).length / this._history.length;
+    // Count matches without allocating a new array
+    let matchCount = 0;
+    for (let i = 0; i < this._history.length; i++) {
+      if (this._history[i]) matchCount++;
+    }
+    return matchCount / this._history.length;
   }
 
   /** @private */

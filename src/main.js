@@ -24,6 +24,7 @@ import { AnimationScheduler } from './engine/AnimationScheduler.js';
 import { Entity } from './entity/Entity.js';
 
 import { PulseGenerator } from './pattern/PulseGenerator.js';
+import { PulseRenderer } from './pattern/PulseRenderer.js';
 import { ToleranceSystem } from './pattern/ToleranceSystem.js';
 import { RhythmMatcher } from './pattern/RhythmMatcher.js';
 
@@ -48,10 +49,11 @@ const memory        = new MemorySystem();
 const coords        = new CoordinateSystem();
 const renderer      = new Renderer(canvas);
 const scheduler     = new AnimationScheduler();     // Self-wires to RENDER_TICK
-const particles     = new ParticleManager();
+const particles     = new ParticleManager();        // eslint-disable-line no-unused-vars
 const worldEngine   = new WorldEngine();
 const tolerance     = new ToleranceSystem();
 const pulseGen      = new PulseGenerator();
+const pulseRenderer = new PulseRenderer(coords);   // eslint-disable-line no-unused-vars
 const rhythmMatcher = new RhythmMatcher(tolerance); // eslint-disable-line no-unused-vars
 const behavior      = new BehaviorEngine();
 const audio         = new AudioEngine();
@@ -110,8 +112,9 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('touchstart', handleFirstGesture, { passive: true });
 
 // ─── Custom Cursor ────────────────────────────────────────────────────────────
-// Cursor is hidden globally in CSS. Draw it on canvas in Milestone 2.
-// During signature moment (Milestone 8), canvas cursor is absorbed by entity.
+// Cursor is hidden globally via CSS (cursor:none on body).
+// Entity tracks cursor for CURIOUS state lean (implemented in Entity.js).
+// Signature moment (M8): entity briefly absorbs cursor — no pointer for ~3s.
 
 // ─── Startup Sequence ─────────────────────────────────────────────────────────
 
@@ -134,14 +137,20 @@ window.addEventListener('beforeunload', () => {
 // 5. Start render loop — produces black screen at 60fps
 renderer.start();
 
-// 6. Entity intro (currently stub — Milestone 2 will fade it in)
+// 6. Entity intro — fades in over 2.4s (smootherstep) after 600ms silence
 entity.init();
 
-// 7. Pulse generator starts (first pulse after delay)
+// 7. Pulse generator starts (first pulse after TIMING.FIRST_PULSE_DELAY_MS)
 pulseGen.start();
 
-// 8. Hint layer timer begins
+// 8. Hint layer timer begins (shows '...' after 12s idle)
 hint.start();
+
+// 9. Wire response time recording to MemorySystem
+// MemorySystem records visitor's rhythm fingerprint for return visits
+EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs }) => {
+  memory.recordResponseTime(responseTimeMs);
+});
 
 // ─── Return visitor behavior ──────────────────────────────────────────────────
 // If this is not the first visit, seed trust from memory.
