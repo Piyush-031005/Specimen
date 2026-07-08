@@ -55,7 +55,7 @@ const pulseGen      = new PulseGenerator();
 const rhythmMatcher = new RhythmMatcher(tolerance); // eslint-disable-line no-unused-vars
 const behavior      = new BehaviorEngine();
 const audio         = new AudioEngine();
-const entity        = new Entity(coords);
+const entity        = new Entity(coords, scheduler);
 const hint          = new HintLayer(hintEl);
 
 // ─── Input Handler ────────────────────────────────────────────────────────────
