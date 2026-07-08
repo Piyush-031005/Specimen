@@ -103,6 +103,9 @@ export class EntityAnimator {
     /** @type {string} Current behavior state */
     this._behaviorState = BEHAVIOR_STATES.CALM;
 
+    /** @type {number} Global modifier for M8 calmness */
+    this._calmMultiplier = 1.0;
+
     /** @type {object} Current animation params (interpolated toward target) */
     this._currentParams = { ...STATE_ANIM_PARAMS[BEHAVIOR_STATES.CALM] };
 
@@ -125,6 +128,10 @@ export class EntityAnimator {
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
       this._behaviorState = state;
       this._targetParams = STATE_ANIM_PARAMS[state] ?? STATE_ANIM_PARAMS[BEHAVIOR_STATES.CALM];
+    });
+
+    EventBus.on(EVENTS.SIGNATURE_MOMENT_END, () => {
+      this._calmMultiplier = 0.6; // Permanently calm the entity down after M8
     });
   }
 
@@ -150,7 +157,8 @@ export class EntityAnimator {
 
     // ── Breathing (scale oscillation) ─────────────────────────────────────
     // Uses organicSine — has subtle asymmetry, feels like a real breath.
-    const breathRaw = organicSine(this._time, p.breathSpeed, this._breathPhase);
+    const currentBreathSpeed = p.breathSpeed * this._calmMultiplier;
+    const breathRaw = organicSine(this._time, currentBreathSpeed, this._breathPhase);
     const breathValue = breathRaw * p.breathAmplitude;
     this._state.breathScale = 1.0 + breathValue;
 
@@ -160,7 +168,7 @@ export class EntityAnimator {
     const noiseT = this._time * 0.15;
     const rotationNoise = valueNoise2D(noiseT, noiseT * 0.7) * 0.3 + 0.85;
 
-    const rotSpeed = p.rotationSpeed * rotationNoise * hesitationMod;
+    const rotSpeed = p.rotationSpeed * this._calmMultiplier * rotationNoise * hesitationMod;
     this._state.outerRotation += rotSpeed * deltaSeconds;
     this._state.innerRotation -= rotSpeed * deltaSeconds * 0.73; // Not same speed — offset rhythm
 

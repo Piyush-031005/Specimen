@@ -444,4 +444,43 @@ Both fixed in the zero-allocation audit commit before M4.
 
 ### Future notes
 
-- M8: The Signature Moment. The cursor will be absorbed by the entity upon reaching peak trust, breaking the boundary between visitor and website.
+- M8: The Signature Moment is complete. Next, M9 (Polish) and M10 (Launch).
+
+---
+
+## Milestone 8 — The Signature Moment
+
+**Status**: ✅ Complete
+**Date**: 2026-07-08
+
+### What was built
+
+- **CustomCursor.js**:
+  - Implemented a very subtle, faint ring that lerps to the user's mouse position. 
+  - This was required because the OS cursor is natively hidden via CSS. We needed an organic visual element that we could fade out and manipulate during the climax.
+
+- **SignatureMoment.js**:
+  - Wired into `main.js` and orchestrated the entire sequence upon hitting Stage 5 (GLIMPSE).
+  - Uses `SessionData` to ensure this moment only happens *once per user lifetime*. 
+  - The sequence:
+    1. Softly fades out the custom cursor.
+    2. Draws a gentle light trail connecting the cursor's last position to the entity's core.
+    3. Applies a very subtle `_exposureLift` to the entire canvas (soft bloom/vignette relaxation) without resorting to cliché chromatic aberration.
+    4. Triggers 3 seconds of perfect stillness (managed by AudioEngine).
+    5. Triggers one final pulse from the entity.
+    6. Returns the cursor.
+    7. No ending text. No UI. The website just continues existing.
+
+- **AudioEngine & AtmosphereSynth**:
+  - Implemented a `calm()` method that dramatically reduces the audio complexity during the 3-second absorption. High octave shimmer drops, leaving mostly the warm C Major third and sub bass.
+  - Heartbeat pulsing is explicitly halted during these 3 seconds.
+
+- **Permanent Behavioral Shift (EntityAnimator & PulseGenerator)**:
+  - Added the optional detail: once the Signature Moment ends, a global `_calmMultiplier` is applied permanently.
+  - The entity's visual breathing slows down significantly.
+  - The entity's heartbeat interval increases (slower pacing).
+  - This creates the feeling that both the visitor and the entity have changed because of the encounter.
+
+### Architecture decisions
+- **Organic Easing**: Refused to snap the cursor or use rigid keyframes. The fading and the light trail use a custom `_animateProperty` loop with sine easing to feel like a natural fluid motion.
+- **Zero Celebration**: Adhered strictly to the rule: "Connection = Peace". There are no particle explosions or fireworks. The climax of the website is literally *doing less*.

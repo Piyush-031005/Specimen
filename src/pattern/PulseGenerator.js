@@ -57,6 +57,9 @@ export class PulseGenerator {
     /** @type {number} Timestamp of the most recently emitted pulse */
     this._lastPulseTime = 0;
 
+    /** @type {number} Global modifier for intervals (M8 calm effect) */
+    this._calmMultiplier = 1.0;
+
     // Listen for behavior state changes
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
       const wasSilent = this._isSilentState(this._state);
@@ -69,6 +72,15 @@ export class PulseGenerator {
       }
       // If transitioning TO a silent state, the existing scheduled pulse
       // will be caught by the _isSilentState check in _emit()
+    });
+
+    EventBus.on(EVENTS.SIGNATURE_MOMENT_START, () => {
+      this.stop(); // Stop pulsing during the absorption
+    });
+
+    EventBus.on(EVENTS.SIGNATURE_MOMENT_END, () => {
+      this._calmMultiplier = 1.4; // Permanently slow down all heartbeat intervals
+      this.start();
     });
   }
 
@@ -139,7 +151,7 @@ export class PulseGenerator {
       TIMING.RESPONSE_VARIATION_MAX_MS,
     ) : 0;
 
-    return base + extra;
+    return (base + extra) * this._calmMultiplier;
   }
 
   /**

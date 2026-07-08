@@ -131,4 +131,20 @@ export class AtmosphereSynth {
       this._gains[i].gain.setTargetAtTime(val, t, transitionTime / 3);
     }
   }
+
+  /**
+   * Drops high frequencies and reduces volume for the Signature Moment.
+   */
+  calm() {
+    if (!this._started) return;
+    const t = this._ctx.currentTime;
+    const transitionTime = 1.0;
+
+    // Sub stays (0.3), Fifth lowers (0.1), Octave drops to near zero, Third lowers (0.1)
+    const calmMix = [0.3, 0.1, 0.001, 0.1];
+
+    for (let i = 0; i < 4; i++) {
+      this._gains[i].gain.setTargetAtTime(calmMix[i], t, transitionTime);
+    }
+  }
 }

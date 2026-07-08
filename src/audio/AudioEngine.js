@@ -65,6 +65,15 @@ export class AudioEngine {
       // Audio will naturally resume when the world stage gets broadcasted next, 
       // or we can let the behavior engine trigger the state update.
     });
+
+    // Signature Moment (M8)
+    EventBus.on(EVENTS.SIGNATURE_MOMENT_START, () => {
+      this._atmosphereSynth.calm();
+    });
+
+    EventBus.on(EVENTS.SIGNATURE_MOMENT_END, () => {
+      this._atmosphereSynth.setStage(4); // Restore Stage 5 mix (GLIMPSE = 4)
+    });
   }
 
   /**

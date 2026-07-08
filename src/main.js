@@ -36,6 +36,8 @@ import { ParticleManager } from './world/ParticleManager.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { MemorySystem } from './memory/MemorySystem.js';
 import { HintLayer } from './ui/HintLayer.js';
+import { CustomCursor } from './ui/CustomCursor.js';
+import { SignatureMoment } from './ui/SignatureMoment.js';
 
 import { EventBus } from './utils/EventBus.js';
 import { EVENTS } from './constants.js';
@@ -59,6 +61,13 @@ const behavior      = new BehaviorEngine(memory);
 const audio         = new AudioEngine();
 const entity        = new Entity(coords, scheduler);
 const hint          = new HintLayer(hintEl);
+const customCursor  = new CustomCursor(coords);
+const signatureMoment = new SignatureMoment(customCursor, coords, memory);
+
+EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
+  customCursor.update(tickData.deltaSeconds);
+  customCursor.render(tickData.ctx);
+});
 
 // ─── Input Handler ────────────────────────────────────────────────────────────
 /**
