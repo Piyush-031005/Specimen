@@ -129,15 +129,24 @@ export class WorldEngine {
     }
 
     // Certainty drops when movement is highly erratic/unpredictable
+    // Film Cut: Add hesitation. Darkness makes a decision.
+    let isErratic = variance > 1.0 || avgV > 3.0;
+    if (isErratic) {
+      this._timeErratic = (this._timeErratic || 0) + deltaSeconds;
+    } else {
+      this._timeErratic = 0;
+    }
+
     let targetCertainty = 1.0;
-    if (variance > 1.0 || avgV > 3.0) {
+    if (this._timeErratic > 0.5) {
+      // It hesitated for 0.5s, now it decides they are a threat
       targetCertainty = 0.0;
     } else if (avgV > 0.5) {
       targetCertainty = 0.5;
     }
     
-    // Certainty recovers slowly but breaks quickly
-    const decay = targetCertainty < this._certainty ? 8.0 : 0.5;
+    // Certainty recovers slowly, and breaks deliberately (decay was 8.0, now 1.5)
+    const decay = targetCertainty < this._certainty ? 1.5 : 0.5;
     this._certainty = expDecay(this._certainty, targetCertainty, decay, deltaSeconds);
 
     // Contrast Principle: First movement is normal (0.1x tension), builds up to full (1.0x) after ~2000px of movement
