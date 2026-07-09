@@ -295,7 +295,23 @@ export class EntityAnimator {
 
     const currentBreathSpeed = p.breathSpeed * this._calmMultiplier * speedMod;
     const breathRaw = organicSine(this._time, currentBreathSpeed, this._breathPhase);
-    const breathValue = breathRaw * (p.breathAmplitude * ampMod);
+    
+    // Identity Signature: breath amplitude asymmetry and drift biases
+    let sigAmpMod = 1.0;
+    let sigRotMod = 1.0;
+    let sigDriftX = 0;
+    let sigDriftY = 0;
+    
+    if (this._memoryData && this._memoryData.identitySignature) {
+      const sig = this._memoryData.identitySignature;
+      // If breathAsymmetry > 1.0, it breathes slightly deeper.
+      sigAmpMod = sig.breathAsymmetry;
+      sigRotMod = sig.rotationalBias;
+      sigDriftX = sig.driftBiasX * 0.05; // tiny permanent offset
+      sigDriftY = sig.driftBiasY * 0.05;
+    }
+
+    const breathValue = breathRaw * (p.breathAmplitude * ampMod * sigAmpMod);
     
     // Decay the interaction expansion quickly (120-180ms feel)
     this._interactionExpansion = expDecay(this._interactionExpansion, 0, 15, deltaSeconds);
@@ -308,7 +324,7 @@ export class EntityAnimator {
     const noiseT = this._time * 0.15;
     const rotationNoise = valueNoise2D(noiseT, noiseT * 0.7) * 0.3 + 0.85;
 
-    const rotSpeed = p.rotationSpeed * this._calmMultiplier * rotationNoise * hesitationMod;
+    const rotSpeed = p.rotationSpeed * this._calmMultiplier * rotationNoise * hesitationMod * sigRotMod;
     this._state.outerRotation += rotSpeed * deltaSeconds;
     this._state.innerRotation -= rotSpeed * deltaSeconds * 0.73; // Not same speed — offset rhythm
 
@@ -318,8 +334,8 @@ export class EntityAnimator {
 
     // ── Idle drift (slow 2D wander in world space) ─────────────────────────
     // Uses two independent organicSines on different phases for Lissajous-like paths.
-    let driftX = organicSine(this._time, 0.07, this._driftPhaseX) * p.driftScale;
-    let driftY = organicSine(this._time, 0.05, this._driftPhaseY) * p.driftScale;
+    let driftX = (organicSine(this._time, 0.07, this._driftPhaseX) * p.driftScale) + sigDriftX;
+    let driftY = (organicSine(this._time, 0.05, this._driftPhaseY) * p.driftScale) + sigDriftY;
 
     if (this._prefersReducedMotion) {
       driftX = 0;
@@ -397,63 +413,46 @@ export class EntityAnimator {
     if (this._currentInitiative) {
       this._initiativeTimer -= deltaSeconds;
       if (this._initiativeTimer <= 0) {
+        if (this._currentInitiative === 'vigilance') {
+           EventBus.emit('VIGILANCE_END', {});
+           this._state.isVigilant = false;
+        }
         this._currentInitiative = null;
         // Restore normal params
         this._targetParams = { ...STATE_ANIM_PARAMS[this._behaviorState] };
       }
       
       // Apply initiative overrides
-      if (this._currentInitiative === 'reach') {
-         // Subtly reach out: higher drift, deeper breath
-         this._targetParams.driftScale = STATE_ANIM_PARAMS[this._behaviorState].driftScale * 2.5;
-         this._targetParams.breathAmplitude = STATE_ANIM_PARAMS[this._behaviorState].breathAmplitude * 1.5;
-      } else if (this._currentInitiative === 'observe') {
-         // Pause breathing, slight rotation spike to 'look', no drift
-         this._targetParams.breathSpeed = 0.05;
-         this._targetParams.driftScale = 0;
-         this._targetParams.rotationSpeed = STATE_ANIM_PARAMS[this._behaviorState].rotationSpeed * 3.0;
+      if (this._currentInitiative === 'vigilance') {
+         // Intense listening. Microscopic breathing, microscopic drift, high tension.
+         this._targetParams.breathSpeed = 0.02;
+         this._targetParams.driftScale = 0.001;
+         this._targetParams.rotationSpeed = STATE_ANIM_PARAMS[this._behaviorState].rotationSpeed * 0.2;
       }
       return; // Already taking action
     }
 
-    // 3. Probabilistic Evaluation
-    // Only evaluate if completely still for > 4 seconds
-    if (this._stillnessTimer > 4.0) {
-       // Evaluate sporadically (~45% chance per second to make a decision check)
-       if (Math.random() < 0.01) { 
-         // Why did the organism decide to do this now?
-         // Motivation = 50% Trust + 30% Temperament + 20% Habitat Safety
-         const motivationScore = (this._memoryData.trust / 100) * 0.5 + 
-                                 ((this._temperament + 1) / 2) * 0.3 + 
-                                 habitatSafety * 0.2;
-
-         if (motivationScore > 0.7) {
-           // Motivation: The organism feels completely safe and trusted. It wants contact.
-           if (Math.random() < 0.6) {
-             this._currentInitiative = 'reach';
-             this._initiativeTimer = randomFloat(2.0, 4.0);
-           } else {
-             // Sometimes it just watches you peacefully
-             this._currentInitiative = 'observe';
-             this._initiativeTimer = randomFloat(1.5, 3.0);
-           }
-         } else if (motivationScore < 0.3) {
-           // Motivation: The organism feels unsafe or traumatized. It is deeply suspicious of the stillness.
-           if (Math.random() < 0.6) {
-             // It flinches, expecting a sudden movement
-             this._isHesitating = true;
-             this._hesitationDuration = randomFloat(0.3, 0.7);
-             this._hesitationTimer = this._hesitationDuration;
-           } else {
-             // It freezes to observe the threat
-             this._currentInitiative = 'observe';
-             this._initiativeTimer = randomFloat(2.0, 4.0);
-           }
-         } else {
-           // Motivation: Neutral. It's unsure what to do, so it just observes cautiously.
-           if (Math.random() < 0.4) {
-             this._currentInitiative = 'observe';
-             this._initiativeTimer = randomFloat(1.0, 2.5);
+    // 3. Probabilistic Evaluation for Vigilance
+    // Vigilance is a rare moment of intense listening when the user is completely still.
+    // It requires patience and anticipation from the visitor.
+    if (this._stillnessTimer > 3.0) {
+       // Check roughly every second (1.5% chance per frame = ~60% chance to check per sec)
+       if (Math.random() < 0.015) { 
+         // Must have some trust established to enter vigilance (it doesn't listen if it's panicking)
+         if (this._memoryData.trust > 30) {
+           // 10% chance to actually enter vigilance once conditions are met
+           if (Math.random() < 0.1) {
+             this._currentInitiative = 'vigilance';
+             this._state.isVigilant = true;
+             
+             // Most pauses are 2-4 seconds. Rarely 5-6.
+             let duration = randomFloat(2.0, 4.0);
+             if (Math.random() < 0.15) {
+                duration = randomFloat(4.5, 6.0); // The rare, uncomfortable silence
+             }
+             this._initiativeTimer = duration;
+             
+             EventBus.emit('VIGILANCE_START', { duration });
            }
          }
        }

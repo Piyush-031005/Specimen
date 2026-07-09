@@ -151,4 +151,31 @@ export class AtmosphereSynth {
       this._gains[i].gain.exponentialRampToValueAtTime(calmMix[i], t + transitionTime);
     }
   }
+
+  /**
+   * Drops all high frequencies into a low, heavy rumble for Vigilance.
+   * "The world holds its breath."
+   */
+  vigilanceStart() {
+    if (!this._started) return;
+    const t = this._ctx.currentTime;
+    const transitionTime = 1.0; // Fast drop into silence
+
+    // Only the fundamental sub-bass remains, creating heavy tension.
+    const vigilanceMix = [0.2, 0.001, 0.001, 0.001];
+
+    for (let i = 0; i < 4; i++) {
+      const currentVal = Math.max(0.001, this._gains[i].gain.value);
+      this._gains[i].gain.setValueAtTime(currentVal, t);
+      this._gains[i].gain.exponentialRampToValueAtTime(vigilanceMix[i], t + transitionTime);
+    }
+  }
+
+  /**
+   * Smoothly restores the atmosphere after Vigilance ends.
+   */
+  vigilanceEnd(currentStage) {
+    // Just re-apply the current stage mix
+    this.setStage(currentStage);
+  }
 }

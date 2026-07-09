@@ -44,6 +44,7 @@ export class AudioEngine {
     });
 
     EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stage }) => {
+      this._currentWorldStage = stage;
       this._atmosphereSynth.setStage(stage);
     });
 
@@ -73,6 +74,19 @@ export class AudioEngine {
 
     EventBus.on(EVENTS.SIGNATURE_MOMENT_END, () => {
       this._atmosphereSynth.setStage(4); // Restore Stage 5 mix (GLIMPSE = 4)
+    });
+
+    // Vigilance Moment
+    EventBus.on('VIGILANCE_START', () => {
+      this._atmosphereSynth.vigilanceStart();
+    });
+
+    EventBus.on('VIGILANCE_END', () => {
+      // Need to restore based on the current world stage. We don't track it locally, 
+      // but we can ask the synth to re-apply it if we just save the last stage.
+      // Wait, AtmosphereSynth.vigilanceEnd needs the stage.
+      // Let's track _currentWorldStage in AudioEngine.
+      this._atmosphereSynth.vigilanceEnd(this._currentWorldStage || 0);
     });
   }
 

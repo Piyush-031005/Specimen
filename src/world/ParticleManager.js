@@ -88,6 +88,9 @@ export class ParticleManager {
      */
     this._activeCount = 0;
 
+    /** @type {number} Global speed multiplier for vigilance moments */
+    this._vigilanceMultiplier = 1.0;
+
     // ─── Event subscriptions ─────────────────────────────────────────────────
 
     EventBus.on(EVENTS.PERF_QUALITY_CHANGED, ({ quality }) => {
@@ -105,6 +108,16 @@ export class ParticleManager {
       this._stageLimit = stageDef.particleCount;
       this._stageDef   = stageDef;
     });
+
+    EventBus.on('VIGILANCE_START', () => {
+      this._vigilanceTarget = 0.15; // Slow down ambient particles dramatically
+    });
+
+    EventBus.on('VIGILANCE_END', () => {
+      this._vigilanceTarget = 1.0;
+    });
+
+    this._vigilanceTarget = 1.0;
 
     EventBus.on(EVENTS.RENDER_TICK, ({ ctx, deltaSeconds }) => {
       this.update(deltaSeconds, ctx);
@@ -245,9 +258,12 @@ export class ParticleManager {
         p.vy = Math.sin(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nY * noiseIntensity * 0.5) + (biasY * 0.5);
       }
 
-      // Apply velocity
-      p.x += p.vx * deltaSeconds;
-      p.y += p.vy * deltaSeconds;
+      // Smoothly interpolate vigilance multiplier
+      this._vigilanceMultiplier += (this._vigilanceTarget - this._vigilanceMultiplier) * (deltaSeconds * 2.0);
+
+      // Apply velocity with vigilance damping
+      p.x += p.vx * deltaSeconds * this._vigilanceMultiplier;
+      p.y += p.vy * deltaSeconds * this._vigilanceMultiplier;
 
       // Opacity fade-out (sine curve for smooth in/out)
       const lifeProgress = p.age / p.maxAge;
