@@ -40,25 +40,26 @@ export class FiberSystem {
     for (let i = 0; i < this._numFibers; i++) {
       let startX, startY, endX, endY;
 
-      // 80% of fibers anchor near the top/bottom poles. 20% anchor along the sides.
+      // The organism is larger than the screen. Anchors originate off-screen.
+      // 80% of fibers anchor far beyond top/bottom poles. 20% anchor far beyond the sides.
       if (Math.random() < 0.8) {
         // Vertical-ish fibers
-        startX = randomFloat(cx - w * 0.2, cx + w * 0.2);
-        startY = baseStartY + randomFloat(-20, 20);
-        endX = randomFloat(cx - w * 0.2, cx + w * 0.2);
-        endY = baseEndY + randomFloat(-20, 20);
+        startX = randomFloat(cx - w * 0.4, cx + w * 0.4);
+        startY = baseStartY - randomFloat(h * 0.5, h * 1.5);
+        endX = randomFloat(cx - w * 0.4, cx + w * 0.4);
+        endY = baseEndY + randomFloat(h * 0.5, h * 1.5);
       } else {
         // Horizontal-ish fibers (creates width in the body)
-        startX = cx + randomFloat(-w * 0.3, w * 0.3);
+        startX = cx - randomFloat(w * 0.8, w * 1.5);
         startY = randomFloat(baseStartY, baseEndY);
-        endX = cx + randomFloat(-w * 0.3, w * 0.3);
+        endX = cx + randomFloat(w * 0.8, w * 1.5);
         endY = randomFloat(baseStartY, baseEndY);
       }
       
       // Visual Hierarchy: 15% are Arterial (thick, strong), 85% are Capillary (thin, faint)
       const isArterial = Math.random() < 0.15;
       const lineWidth = isArterial ? randomFloat(1.2, 1.8) : randomFloat(0.2, 0.5);
-      const baseOpacity = isArterial ? randomFloat(0.7, 1.0) : randomFloat(0.1, 0.3);
+      const baseOpacity = isArterial ? randomFloat(0.5, 0.8) : randomFloat(0.1, 0.2);
 
       this._fibers.push({
         tStartX: startX,
@@ -98,9 +99,26 @@ export class FiberSystem {
     // Spring speed config
     let globalSpringSpeed = 5.0; // Slow retraction by default
     
-    if (pluckPhase === 'exploded') {
-      globalSpringSpeed = 40.0; // Enormous kinetic release
-    } else if (pluckPhase === 'tension' || pluckPhase === 'freeze') {
+    // Calculate exact time since unraveled for the recoil illusion
+    if (!this._lastUnravelState && isUnraveled) {
+      this._unravelStartTime = performance.now();
+    }
+    this._lastUnravelState = isUnraveled;
+    
+    const timeSinceUnravel = isUnraveled ? (performance.now() - (this._unravelStartTime || 0)) : Infinity;
+    
+    // Math-based Overshoot logic (Shock Phase)
+    let recoilOvershoot = 0;
+    if (isUnraveled && timeSinceUnravel < 400) {
+      // Violent spike to 1.5x scale in the first 150ms, then slams back to 1.0
+      const t = timeSinceUnravel / 400; // 0 to 1
+      recoilOvershoot = Math.sin(t * Math.PI) * (1 - t) * 1.5; 
+      globalSpringSpeed = 40.0; // Inevitable, massive velocity
+    } else if (isUnraveled) {
+      globalSpringSpeed = 10.0; // Settling velocity
+    }
+
+    if (pluckPhase === 'tension' || pluckPhase === 'freeze') {
       targetProgress = 0.0; // Do not unravel yet!
       globalSpringSpeed = 30.0;
     }
@@ -113,10 +131,17 @@ export class FiberSystem {
     const baseStartY = cy - (h * 0.4);
     const baseEndY = cy + (h * 0.4);
 
-    // Global vibrations during tension phase
+    // Tension Phase: The Taut Wire Vibrates
     let globalVibrationX = 0;
     if (pluckPhase === 'tension') {
-      globalVibrationX = Math.sin(performance.now() * 0.05) * 8.0; // Violent shaking
+      globalVibrationX = (Math.random() - 0.5) * 12.0; // Harsh, erratic vibration
+    }
+    
+    // Curiosity Phase: The occasional twitch (before pluck)
+    if (pluckPhase === 'idle' && this._unravelProgress === 0) {
+      if (Math.random() < 0.02) { // 2% chance per frame to twitch
+        globalVibrationX = (Math.random() - 0.5) * 4.0;
+      }
     }
     
     for (let i = 0; i < this._numFibers; i++) {
@@ -153,29 +178,34 @@ export class FiberSystem {
       f.currEndX = targetEndX + (this._unravelProgress === 0 ? globalVibrationX : 0);
       f.currEndY = targetEndY;
       
-      // Control point logic
-      let unraveledCpX = finalTargetCpX + (f.cpOffsetX * tensionMod);
-      let unraveledCpY = finalTargetCpY + (f.cpOffsetY * tensionMod);
+      // Intrusive Cursor: The user is trespassing. Fibers bend OUT OF THE WAY to accommodate the intrusion.
+      // We calculate distance from the unraveled control point to the cursor.
+      let unraveledCpX = cx + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * recoilOvershoot);
+      let unraveledCpY = cy + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * recoilOvershoot);
       
-      if (isCursorStill) {
-        // Swirl around the cursor (impossible intention)
-        const angle = (i / this._numFibers) * Math.PI * 2 + (performance.now() * 0.0005 * f.speed);
-        const radius = 80 * tensionMod;
-        unraveledCpX = finalTargetCpX + Math.cos(angle) * radius;
-        unraveledCpY = finalTargetCpY + Math.sin(angle) * radius;
-        breathMod *= 0.3; // Calm the breathing down while swirling
+      if (isUnraveled && pluckPhase !== 'freeze') {
+        const dx = unraveledCpX - finalTargetCpX;
+        const dy = unraveledCpY - finalTargetCpY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        // If cursor gets too close, the fiber forcefully pushes away (Intrusion reaction)
+        const threshold = f.isArterial ? 250 : 150;
+        if (dist < threshold && dist > 1) {
+          const pushForce = Math.pow(1 - (dist / threshold), 2) * 200; // Exponential push
+          unraveledCpX += (dx / dist) * pushForce;
+          unraveledCpY += (dy / dist) * pushForce;
+        }
       }
       
-      // If returning visitor, topology is permanently slightly twisted
+      // If returning visitor, topology is permanently slightly twisted (Memory)
       if (isReturningVisitor) {
-        breathMod *= 1.4; // More erratic breathing
         const twistAngle = (i / this._numFibers) * Math.PI;
         unraveledCpX += Math.cos(twistAngle) * 40;
         unraveledCpY += Math.sin(twistAngle) * 40;
       }
       
-      // Add breathing noise
-      let breath = Math.sin(performance.now() * 0.001 * f.speed + f.phase) * 20 * this._unravelProgress * breathMod;
+      // Add subtle breathing noise (mostly static, minimal life)
+      let breath = Math.sin(performance.now() * 0.001 * f.speed + f.phase) * 5 * this._unravelProgress;
       
       if (pluckPhase === 'freeze') {
         breath = 0; // Absolute stillness
@@ -189,7 +219,7 @@ export class FiberSystem {
       // Defensive state snaps quickly, calm state flows slowly
       let responseSpeed = behaviorState === 'defensive' ? 12.0 : (4.0 * hierarchyMod);
       if (pluckPhase === 'tension') responseSpeed = 40.0;
-      if (pluckPhase === 'exploded') responseSpeed = 25.0 * hierarchyMod; // Enormous kinetic energy
+      if (recoilOvershoot > 0) responseSpeed = 50.0; // Exploding outward
       if (pluckPhase === 'freeze') responseSpeed = 100.0; // Instant lock
       
       f.currCpX = expDecay(f.currCpX, targetCurrentCpX, responseSpeed, deltaSeconds);
