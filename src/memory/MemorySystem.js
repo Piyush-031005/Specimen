@@ -41,6 +41,10 @@ export class MemorySystem {
           fingerprint: {
             ...DEFAULT_SESSION_DATA.fingerprint,
             ...(parsed.fingerprint || {})
+          },
+          identitySignature: {
+            ...DEFAULT_SESSION_DATA.identitySignature,
+            ...(parsed.identitySignature || {})
           }
         };
       }
@@ -56,15 +60,44 @@ export class MemorySystem {
 
   /**
    * Save current session state to storage.
+   * Micro-evolves the Identity Signature on every save.
    */
   save() {
     this._data.lastVisitTimestamp = Date.now();
+    this._evolveIdentitySignature();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this._data));
       EventBus.emit(EVENTS.MEMORY_SAVED, { data: this._data });
     } catch {
       // Storage unavailable — fail silently
     }
+  }
+
+  /**
+   * Slowly erode the Identity Signature based on history.
+   * This is microscopic. It takes many sessions to become prominent.
+   * @private
+   */
+  _evolveIdentitySignature() {
+    const sig = this._data.identitySignature;
+    const temp = this._data.temperament; // -1 to 1
+
+    // Breath Asymmetry: Playful = longer inhale, Guarded = longer exhale
+    // Evolves by 0.001 per save towards a max of 1.1 or 0.9
+    const targetAsym = 1.0 + (temp * 0.1);
+    sig.breathAsymmetry += (targetAsym - sig.breathAsymmetry) * 0.01;
+
+    // Drift Bias: slowly biased by where they prefer to interact (spatialBias)
+    // If they interact right, it slowly drifts right.
+    const targetDriftX = (this._data.spatialBiasX - 0.5) * 2; // -1 to 1
+    const targetDriftY = (this._data.spatialBiasY - 0.5) * 2;
+    sig.driftBiasX += (targetDriftX - sig.driftBiasX) * 0.01;
+    sig.driftBiasY += (targetDriftY - sig.driftBiasY) * 0.01;
+
+    // Rotational Bias: Fast, frantic history (low temp, high variance) causes a slightly erratic/faster rotation
+    const varianceRatio = Math.min(this._data.fingerprint.varianceMs / 200, 1.0); // 0 to 1
+    const targetRot = 1.0 + (varianceRatio * 0.1) - (temp * 0.05);
+    sig.rotationalBias += (targetRot - sig.rotationalBias) * 0.01;
   }
 
   /**

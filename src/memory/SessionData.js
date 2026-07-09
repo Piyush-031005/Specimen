@@ -16,6 +16,14 @@
  */
 
 /**
+ * @typedef {Object} IdentitySignature
+ * @property {number} breathAsymmetry — Multiplier for inhale vs exhale time (e.g. 1.05)
+ * @property {number} driftBiasX      — Permanent horizontal drift pull [-1.0 to 1.0]
+ * @property {number} driftBiasY      — Permanent vertical drift pull [-1.0 to 1.0]
+ * @property {number} rotationalBias  — Multiplier for rotation speed (e.g. 0.98)
+ */
+
+/**
  * @typedef {Object} SessionData
  * @property {number} trust                — Trust level at end of last session [0, 100]
  * @property {number} worldStage           — World stage reached [0, 4]
@@ -25,6 +33,7 @@
  * @property {number} spatialBiasX         — Accumulated cursor center of mass X (normalized 0-1)
  * @property {number} spatialBiasY         — Accumulated cursor center of mass Y (normalized 0-1)
  * @property {RhythmFingerprint} fingerprint — The visitor's behavioral profile
+ * @property {IdentitySignature} identitySignature — The organism's permanent microscopic physical biases
  * @property {number} lastVisitTimestamp   — Date.now() of last session
  * @property {boolean} firstSuccessAchieved — Whether first successful communication happened
  * @property {boolean} signatureMomentSeen — Whether the cursor absorption happened
@@ -44,6 +53,12 @@ export const DEFAULT_SESSION_DATA = Object.freeze({
     varianceMs: 0,
     matches: 0,
     totalAttempts: 0
+  },
+  identitySignature: {
+    breathAsymmetry: 1.0,
+    driftBiasX: 0.0,
+    driftBiasY: 0.0,
+    rotationalBias: 1.0
   },
   lastVisitTimestamp: 0,
   firstSuccessAchieved: false,
