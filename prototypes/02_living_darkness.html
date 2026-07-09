@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype 2: Living Darkness</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            cursor: default;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height, cx, cy;
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let time = 0;
+        let lastTime = performance.now();
+        
+        // Emotion: Trust
+        let trustTarget = 0.0;
+        // Physical property: The darkness has heavy inertia, so it lags far behind the emotion
+        let physicalDarknessRadius = 100; // Small safe zone initially
+
+        function getTrust(t) {
+            // 0-6 sec: Low trust. Safe zone is small.
+            // 6-20 sec: Trust spikes to high because organism relaxes.
+            if (t < 6.0) return 100; // Radius 100
+            return 800; // Radius 800 (wants to reveal the whole screen)
+        }
+
+        function loop(now) {
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+            time += dt;
+
+            // Cut after 20 seconds
+            if (time > 20.0) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, width, height);
+                return;
+            }
+
+            // Draw a subtle background pattern that is currently hidden by darkness
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, width, height);
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            for(let i=0; i<width; i+=40) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke();
+            }
+            for(let j=0; j<height; j+=40) {
+                ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(width, j); ctx.stroke();
+            }
+
+            // The organism's emotional state changes instantly
+            trustTarget = getTrust(time);
+
+            // The Physics: Darkness has immense inertia.
+            // It uses exponential decay but extremely slow (factor 0.3)
+            const decaySpeed = 0.3; 
+            physicalDarknessRadius = physicalDarknessRadius + (trustTarget - physicalDarknessRadius) * (1.0 - Math.exp(-decaySpeed * dt));
+
+            // Draw the Living Darkness
+            // It's a reverse radial gradient (black outside, transparent inside)
+            const gradient = ctx.createRadialGradient(cx, cy, physicalDarknessRadius * 0.2, cx, cy, physicalDarknessRadius);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.8)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw the "Organism" (just a placeholder light source)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
