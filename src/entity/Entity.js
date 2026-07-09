@@ -36,8 +36,9 @@ export class Entity {
   /**
    * @param {import('../engine/CoordinateSystem.js').CoordinateSystem} coords
    * @param {import('../engine/AnimationScheduler.js').AnimationScheduler} scheduler
+   * @param {import('../memory/MemorySystem.js').MemorySystem} memory
    */
-  constructor(coords, scheduler) {
+  constructor(coords, scheduler, memory) {
     this._coords    = coords;
     this._scheduler = scheduler;
 
@@ -72,7 +73,7 @@ export class Entity {
 
     // ─── Systems ──────────────────────────────────────────────────────────
     this._geometry = new Geometry(coords);
-    this._fiberSystem = new FiberSystem(coords);
+    this._fiberSystem = new FiberSystem(coords, memory);
     this._animator = new EntityAnimator(this._state, this._fiberSystem);
 
     // ─── Cursor tracking (for Curious state lean) ─────────────────────────
