@@ -64,6 +64,9 @@ Nothing in SPECIMEN should exist because it looks cool. Everything must exist be
 **Rule 9: The Guest Experience**
 The visitor must never feel like the protagonist. They must feel like a witness entering a reality that was already alive before they arrived. The universe does not begin when the cursor moves.
 
+**Rule 10: Kill Your Favorite**
+If a prototype becomes your favorite because of how it looks rather than how it changes human behavior, delete it.
+
 ---
 
 ## Future Possibilities (The Backlog)
