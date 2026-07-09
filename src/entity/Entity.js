@@ -193,7 +193,7 @@ export class Entity {
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
     // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor, this._state.pluckPhase);
+    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor, this._state.pluckPhase, this._animator._introState);
 
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.
@@ -219,7 +219,8 @@ export class Entity {
       this._state.behaviorState,
       this._worldStage,
       timeSinceBirth,
-      this._fiberSystem
+      this._fiberSystem,
+      this._animator._introState
     );
 
     if (offsetX !== 0 || offsetY !== 0) {

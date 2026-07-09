@@ -74,7 +74,7 @@ export class Geometry {
    * @param {number} stage               — World stage (1 to 5)
    * @param {number} timeSinceBirth      — Seconds since entity was initialized
    */
-  render(ctx, outerRotation, innerRotation, masterOpacity, breathScale, behaviorState, stage = 1, timeSinceBirth = 100, fiberSystem) {
+  render(ctx, outerRotation, innerRotation, masterOpacity, breathScale, behaviorState, stage = 1, timeSinceBirth = 100, fiberSystem, introState) {
     if (masterOpacity <= 0.001) return;
 
     const cx  = this._center.x;
@@ -83,7 +83,7 @@ export class Geometry {
 
     // ── The Sentient Fiber ─────────────────────────────
     if (fiberSystem) {
-      fiberSystem.render(ctx, masterOpacity, cx, cy);
+      fiberSystem.render(ctx, masterOpacity, cx, cy, introState);
     }
   }
 

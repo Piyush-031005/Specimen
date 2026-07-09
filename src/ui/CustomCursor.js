@@ -36,11 +36,17 @@ export class CustomCursor {
     // Device tracking
     this._isTouch = false;
 
-    this.opacity = 1.0;
-    this.visible = true;
+    this._targetOpacity = 0.0;
+    this.opacity = 0.0;
+    this.visible = true; // Always visible, but opacity 0 initially
     
     // Have we received the first input? (to prevent drawing before mouse moves)
     this._hasInput = false;
+
+    EventBus.on(EVENTS.INTRO_REVEALED, () => {
+      this._targetOpacity = 1.0;
+      document.body.style.cursor = 'none'; // Seamlessly transition from OS to custom
+    });
 
     EventBus.on(EVENTS.USER_INPUT, ({ x, y, type }) => {
       this._targetX = x;
@@ -68,6 +74,9 @@ export class CustomCursor {
    */
   update(deltaSeconds) {
     if (!this.visible || !this._hasInput || this._isTouch) return;
+    
+    // Fade in opacity
+    this.opacity = lerp(this.opacity, this._targetOpacity, 2.0 * deltaSeconds);
 
     // 1. Soft Spring Physics for Position
     // Weightless float: low stiffness, moderate damping

@@ -50,6 +50,7 @@ export const EVENTS = Object.freeze({
   USER_PULSE_RESPONSE: 'input:pulse_response', // Deliberate rhythm response
 
   // Entity
+  INTRO_REVEALED: 'entity:intro_revealed',
   ENTITY_PULSE_EMITTED: 'entity:pulse_emitted',
   ENTITY_STATE_CHANGED: 'entity:state_changed',
   FIBER_PLUCK: 'entity:fiber_pluck',

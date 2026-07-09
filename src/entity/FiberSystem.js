@@ -92,7 +92,7 @@ export class FiberSystem {
   /**
    * Update fiber physics
    */
-  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase) {
+  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState) {
     // Determine target progress
     let targetProgress = isUnraveled ? 1.0 : 0.0;
     
@@ -138,7 +138,7 @@ export class FiberSystem {
     }
     
     // Curiosity Phase: The occasional twitch (before pluck)
-    if (pluckPhase === 'idle' && this._unravelProgress === 0) {
+    if (pluckPhase === 'idle' && this._unravelProgress === 0 && introState !== 'hiding') {
       if (Math.random() < 0.02) { // 2% chance per frame to twitch
         globalVibrationX = (Math.random() - 0.5) * 4.0;
       }
@@ -237,8 +237,27 @@ export class FiberSystem {
   /**
    * Render the fibers
    */
-  render(ctx, masterOpacity, cx, cy) {
+  render(ctx, masterOpacity, cx, cy, introState) {
     if (masterOpacity <= 0.001) return;
+
+    if (introState === 'hiding') {
+      ctx.save();
+      ctx.globalAlpha = 0.02 * masterOpacity; // Extremely faint presence
+      ctx.fillStyle = COLORS.WARM_WHITE;
+      
+      // A subtle shimmer composed of a few tiny dots near the center that twitch organically
+      const shimmerT = performance.now() * 0.002;
+      for (let i = 0; i < 5; i++) {
+         const nx = cx + (Math.sin(shimmerT * (i + 1) * 1.3) * 25);
+         const ny = cy + (Math.cos(shimmerT * (i + 2) * 1.7) * 25);
+         
+         ctx.beginPath();
+         ctx.arc(nx, ny, 1.0, 0, Math.PI * 2);
+         ctx.fill();
+      }
+      ctx.restore();
+      return; // Do not render the core line or fibers yet
+    }
 
     ctx.save();
     ctx.globalAlpha = masterOpacity * 0.4; // Soften fibers so they blend

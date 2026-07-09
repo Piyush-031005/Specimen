@@ -142,6 +142,17 @@ export class EntityAnimator {
       this._interactionExpansion = randomFloat(0.02, 0.05);
     });
 
+    // ─── Intro Sequence State ────────────────────────────────────────────────
+    this._introState = 'hiding'; // 'hiding' -> 'revealed'
+    this._timeSinceLoad = 0;
+    this._stillnessTimer = 0;
+    this._introRevealed = false;
+
+    EventBus.on(EVENTS.INTRO_REVEALED, () => {
+      this._introRevealed = true;
+      this._introState = 'revealed';
+    });
+    
     /** @type {{x: number, y: number, time: number}} Last recorded cursor state */
     this._lastCursor = { x: -1, y: -1, time: 0 };
 
@@ -175,6 +186,7 @@ export class EntityAnimator {
       this._lastCursor.x = x;
       this._lastCursor.y = y;
       this._lastCursor.time = now;
+      this._stillnessTimer = 0; // Reset stillness on movement
     });
 
     // Accessibility check
@@ -189,6 +201,17 @@ export class EntityAnimator {
    */
   update(deltaSeconds) {
     this._time += deltaSeconds;
+    this._timeSinceLoad += deltaSeconds;
+
+    // ── Intro Reveal Logic ──────────────────────────────────────────────
+    if (!this._introRevealed) {
+      this._stillnessTimer += deltaSeconds;
+      
+      // If user is perfectly still for 1.0s, OR they have been moving non-stop for 3.0s (inevitability)
+      if (this._stillnessTimer > 1.0 || this._timeSinceLoad > 3.0) {
+        EventBus.emit(EVENTS.INTRO_REVEALED, {});
+      }
+    }
 
     // ── Smoothly interpolate animation params toward target ────────────────
     // This creates natural transition feel when behavior state changes.
