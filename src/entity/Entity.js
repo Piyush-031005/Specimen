@@ -221,7 +221,8 @@ export class Entity {
       this._worldStage,
       timeSinceBirth,
       this._fiberSystem,
-      this._animator._introState
+      this._animator._introState,
+      this._animator._temperament
     );
 
     if (offsetX !== 0 || offsetY !== 0) {

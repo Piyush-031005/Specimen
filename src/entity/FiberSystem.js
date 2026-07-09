@@ -279,7 +279,7 @@ export class FiberSystem {
   /**
    * Render the fibers
    */
-  render(ctx, masterOpacity, cx, cy, introState) {
+  render(ctx, masterOpacity, cx, cy, introState, temperament = 0.0) {
     if (masterOpacity <= 0.001) return;
 
     if (introState === 'hiding') {
