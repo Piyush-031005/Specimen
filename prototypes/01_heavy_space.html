@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype 1: Heavy Space</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #030303;
+            overflow: hidden;
+            cursor: default; /* Not a game cursor */
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height, cx, cy;
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // The space already exists.
+        const particles = [];
+        const NUM_PARTICLES = 300;
+        for (let i = 0; i < NUM_PARTICLES; i++) {
+            particles.push({
+                baseX: (Math.random() - 0.5) * width * 1.5,
+                baseY: (Math.random() - 0.5) * height * 1.5,
+                speedX: (Math.random() - 0.5) * 0.2,
+                speedY: (Math.random() - 0.5) * 0.2,
+                size: Math.random() * 1.5 + 0.5,
+                opacity: Math.random() * 0.4 + 0.1
+            });
+        }
+
+        let time = 0;
+        let tension = 0;
+        
+        // 20-second cinematic sequence
+        function getTension(t) {
+            // 0-6 sec: Nothing.
+            // 6-10 sec: Tension builds up.
+            // 10-20 sec: Sustained heavy space.
+            if (t < 6.0) return 0.0;
+            if (t < 10.0) {
+                // Smooth ease in
+                let p = (t - 6.0) / 4.0;
+                return p * p * (3 - 2 * p);
+            }
+            return 1.0;
+        }
+
+        let lastTime = performance.now();
+        
+        function loop(now) {
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+            time += dt;
+
+            // Cut after 20 seconds
+            if (time > 20.0) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, width, height);
+                return;
+            }
+
+            ctx.fillStyle = '#030303';
+            ctx.fillRect(0, 0, width, height);
+
+            tension = getTension(time);
+
+            // Heavy Space Physics:
+            // Tension compresses the coordinate system.
+            // Normal space scaling is 1.0. High tension scales space by 0.9.
+            // It draws particles closer together without changing their physics speed.
+            const spaceCompression = 1.0 - (tension * 0.15); // Compress by 15% to be perceptible but subtle
+
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                
+                // Physics exists independent of tension
+                p.baseX += p.speedX;
+                p.baseY += p.speedY;
+
+                // Wrap around logic in base coordinates
+                if (p.baseX > width) p.baseX = -width;
+                if (p.baseX < -width) p.baseX = width;
+                if (p.baseY > height) p.baseY = -height;
+                if (p.baseY < -height) p.baseY = height;
+
+                // The visual rendering of space compresses
+                const renderX = p.baseX * spaceCompression;
+                const renderY = p.baseY * spaceCompression;
+
+                // The particles themselves also feel dense (slightly thicker opacity in dense space)
+                const renderOpacity = p.opacity + (tension * 0.2);
+
+                ctx.globalAlpha = Math.min(1.0, renderOpacity);
+                ctx.fillStyle = '#FFF';
+                ctx.beginPath();
+                ctx.arc(renderX, renderY, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+            requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
