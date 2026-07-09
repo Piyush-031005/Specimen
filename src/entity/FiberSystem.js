@@ -248,7 +248,9 @@ export class FiberSystem {
       }
       
       // Add subtle breathing noise (mostly static, minimal life)
-      let breath = Math.sin(performance.now() * 0.001 * f.speed + f.phase) * 5 * this._unravelProgress;
+      // Film Cut: Add variation so breathing is less predictable
+      const time = performance.now() * 0.001;
+      let breath = (Math.sin(time * f.speed + f.phase) * 0.6 + Math.sin(time * f.speed * 0.33 + f.phase * 2) * 0.4) * 6 * this._unravelProgress;
       
       if (pluckPhase === 'freeze') {
         breath = 0; // Absolute stillness
