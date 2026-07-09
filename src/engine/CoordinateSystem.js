@@ -21,7 +21,7 @@
  */
 
 import { EventBus } from '../utils/EventBus.js';
-import { EVENTS } from '../constants.js';
+import { EVENTS, REALITY_LAWS } from '../constants.js';
 
 export class CoordinateSystem {
   constructor() {
@@ -51,6 +51,14 @@ export class CoordinateSystem {
       this._centerX   = cssWidth * 0.5;
       this._centerY   = cssHeight * 0.5;
     });
+
+    this._tension = 0;
+    this._threatPoint = { x: this._centerX, y: this._centerY };
+
+    EventBus.on('WORLD_PHYSICS_UPDATED', ({ tension, threatPoint }) => {
+      this._tension = tension;
+      this._threatPoint = threatPoint;
+    });
   }
 
   // ─── Core Conversions ─────────────────────────────────────────────────────
@@ -63,10 +71,28 @@ export class CoordinateSystem {
    * @returns {{ x: number, y: number }} Screen position in CSS pixels
    */
   worldToScreen(wx, wy) {
-    return {
-      x: this._centerX + wx * this._halfUnit,
-      y: this._centerY + wy * this._halfUnit,
-    };
+    let sx = this._centerX + wx * this._halfUnit;
+    let sy = this._centerY + wy * this._halfUnit;
+
+    if (REALITY_LAWS.HEAVY_SPACE && this._tension > 0) {
+      // Anisotropic compression: compress along the vector towards the threat
+      const dx = sx - this._threatPoint.x;
+      const dy = sy - this._threatPoint.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.01) {
+        // Tension causes space to shrink inwards towards the threat (max 8% compression)
+        // Only elements reasonably close feel it strongly
+        const compressionRange = this._halfUnit * 2.0; 
+        const influence = Math.max(0, 1.0 - (dist / compressionRange));
+        const squeeze = 1.0 - (this._tension * influence * 0.08);
+
+        sx = this._threatPoint.x + dx * squeeze;
+        sy = this._threatPoint.y + dy * squeeze;
+      }
+    }
+
+    return { x: sx, y: sy };
   }
 
   /**
@@ -77,9 +103,29 @@ export class CoordinateSystem {
    * @returns {{ wx: number, wy: number }} World position in [-1, 1] range
    */
   screenToWorld(sx, sy) {
+    let uncompressedX = sx;
+    let uncompressedY = sy;
+
+    if (REALITY_LAWS.HEAVY_SPACE && this._tension > 0) {
+      // Inverse anisotropic compression
+      const dx = sx - this._threatPoint.x;
+      const dy = sy - this._threatPoint.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.01) {
+        const compressionRange = this._halfUnit * 2.0; 
+        const influence = Math.max(0, 1.0 - (dist / compressionRange));
+        const squeeze = 1.0 - (this._tension * influence * 0.08);
+        
+        // This is an approximation of the inverse, sufficient for hit testing/interaction
+        uncompressedX = this._threatPoint.x + dx / squeeze;
+        uncompressedY = this._threatPoint.y + dy / squeeze;
+      }
+    }
+
     return {
-      wx: (sx - this._centerX) / this._halfUnit,
-      wy: (sy - this._centerY) / this._halfUnit,
+      wx: (uncompressedX - this._centerX) / this._halfUnit,
+      wy: (uncompressedY - this._centerY) / this._halfUnit,
     };
   }
 
