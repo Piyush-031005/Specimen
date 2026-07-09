@@ -124,6 +124,9 @@ export class EntityAnimator {
     /** @type {number} Hesitation duration in seconds */
     this._hesitationDuration = 0;
 
+    /** @type {number} Expansion modifier for micro-interactions (match) */
+    this._interactionExpansion = 0;
+
     // Listen for behavior state changes
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
       this._behaviorState = state;
@@ -133,6 +136,40 @@ export class EntityAnimator {
     EventBus.on(EVENTS.SIGNATURE_MOMENT_END, () => {
       this._calmMultiplier = 0.6; // Permanently calm the entity down after M8
     });
+
+    EventBus.on(EVENTS.AUDIO_MATCH_TRIGGER, () => {
+      // Subtle heartbeat expansion (max 2-5%)
+      this._interactionExpansion = randomFloat(0.02, 0.05);
+    });
+
+    /** @type {{x: number, y: number, time: number}} Last recorded cursor state */
+    this._lastCursor = { x: -1, y: -1, time: 0 };
+
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+      const now = performance.now();
+      if (this._lastCursor.x !== -1) {
+        const dx = x - this._lastCursor.x;
+        const dy = y - this._lastCursor.y;
+        const distSq = dx * dx + dy * dy;
+        const dt = now - this._lastCursor.time;
+        
+        // If cursor moves very fast (e.g. > 1000 pixels per second squared roughly)
+        if (dt > 0 && (distSq / dt) > 1500) {
+          // Entity gets startled / hesitates intentionally
+          if (!this._isHesitating && this._behaviorState !== BEHAVIOR_STATES.DEFENSIVE) {
+            this._isHesitating = true;
+            this._hesitationDuration = randomFloat(0.4, 0.8);
+            this._hesitationTimer = this._hesitationDuration;
+          }
+        }
+      }
+      this._lastCursor.x = x;
+      this._lastCursor.y = y;
+      this._lastCursor.time = now;
+    });
+
+    // Accessibility check
+    this._prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /**
@@ -150,8 +187,8 @@ export class EntityAnimator {
 
     const p = this._currentParams;
 
-    // ── Intentional imperfection — random hesitation ───────────────────────
-    this._tickHesitation(deltaSeconds, p);
+    // ── Intentional imperfection — reaction to startling movement ──────────────
+    this._tickHesitation(deltaSeconds);
 
     const hesitationMod = this._isHesitating ? 0.15 : 1.0;
 
@@ -160,7 +197,11 @@ export class EntityAnimator {
     const currentBreathSpeed = p.breathSpeed * this._calmMultiplier;
     const breathRaw = organicSine(this._time, currentBreathSpeed, this._breathPhase);
     const breathValue = breathRaw * p.breathAmplitude;
-    this._state.breathScale = 1.0 + breathValue;
+    
+    // Decay the interaction expansion quickly (120-180ms feel)
+    this._interactionExpansion = expDecay(this._interactionExpansion, 0, 15, deltaSeconds);
+    
+    this._state.breathScale = 1.0 + breathValue + this._interactionExpansion;
 
     // ── Counter-rotation ──────────────────────────────────────────────────
     // Outer rotates clockwise, inner counter-clockwise.
@@ -178,8 +219,13 @@ export class EntityAnimator {
 
     // ── Idle drift (slow 2D wander in world space) ─────────────────────────
     // Uses two independent organicSines on different phases for Lissajous-like paths.
-    const driftX = organicSine(this._time, 0.07, this._driftPhaseX) * p.driftScale;
-    const driftY = organicSine(this._time, 0.05, this._driftPhaseY) * p.driftScale;
+    let driftX = organicSine(this._time, 0.07, this._driftPhaseX) * p.driftScale;
+    let driftY = organicSine(this._time, 0.05, this._driftPhaseY) * p.driftScale;
+
+    if (this._prefersReducedMotion) {
+      driftX = 0;
+      driftY = 0;
+    }
 
     // Smoothly approach drift target (expDecay prevents snapping)
     this._state.driftX = expDecay(this._state.driftX, driftX, 2.5, deltaSeconds);
@@ -206,23 +252,14 @@ export class EntityAnimator {
   }
 
   /**
-   * Manage random hesitation moments — entity pauses, then resumes.
-   * This is the core intentional imperfection mechanic.
+   * Manage intentional hesitation moments — entity pauses when startled.
    * @private
    */
-  _tickHesitation(deltaSeconds, params) {
+  _tickHesitation(deltaSeconds) {
     if (this._isHesitating) {
       this._hesitationTimer -= deltaSeconds;
       if (this._hesitationTimer <= 0) {
         this._isHesitating = false;
-      }
-    } else {
-      // Random chance per frame — not per second, so it scales with FPS
-      // Normalized: hesitationChance is per-frame at 60fps
-      if (Math.random() < params.hesitationChance) {
-        this._isHesitating      = true;
-        this._hesitationDuration = randomFloat(0.3, 1.1);
-        this._hesitationTimer    = this._hesitationDuration;
       }
     }
   }

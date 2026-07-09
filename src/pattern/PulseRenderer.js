@@ -29,7 +29,7 @@ const TWO_PI      = Math.PI * 2;
 const POOL_SIZE   = 8;    // Max 8 simultaneous pulse rings (more than enough)
 
 // Entity geometry proportion — must match Geometry.js base radius
-const ENTITY_WORLD_RADIUS = 0.28;
+const ENTITY_WORLD_RADIUS = 0.45;
 
 /**
  * @typedef {Object} PulseRing
@@ -40,6 +40,7 @@ const ENTITY_WORLD_RADIUS = 0.28;
  * @property {number}  cy            — screen center Y (CSS px)
  * @property {number}  startRadius   — inner radius at spawn (CSS px)
  * @property {number}  maxRadius     — outer radius at full expansion (CSS px)
+ * @property {number}  opacityPeak   — randomized opacity peak per pulse
  * @property {boolean} isResponse    — true = match echo (electric blue), false = entity pulse (warm white)
  */
 
@@ -61,6 +62,7 @@ export class PulseRenderer {
         cy:          0,
         startRadius: 0,
         maxRadius:   0,
+        opacityPeak: 0,
         isResponse:  false,
       });
     }
@@ -101,13 +103,19 @@ export class PulseRenderer {
       if (!ring.active) {
         const center = this._coords.center;
 
+        // Microscopic variations so no pulse is identical (life vs procedure)
+        const ageVariation = (Math.random() - 0.5) * 0.2;
+        const radVariation = (Math.random() - 0.5) * 0.4;
+        const opcVariation = (Math.random() - 0.2) * 0.1;
+
         ring.active      = true;
         ring.age         = 0;
-        ring.maxAge      = isResponse ? 0.9 : 1.6;
+        ring.maxAge      = isResponse ? (0.9 + ageVariation) : (1.6 + ageVariation);
         ring.cx          = center.x;
         ring.cy          = center.y;
         ring.startRadius = this._entityPixelRadius;
-        ring.maxRadius   = this._entityPixelRadius * (isResponse ? 1.7 : 2.6);
+        ring.maxRadius   = this._entityPixelRadius * (isResponse ? (1.7 + radVariation) : (2.6 + radVariation));
+        ring.opacityPeak = isResponse ? (0.55 + opcVariation) : (0.38 + opcVariation);
         ring.isResponse  = isResponse;
         return;
       }
@@ -158,20 +166,25 @@ export class PulseRenderer {
       const eased         = smootherstep(progress);
       const currentRadius = ring.startRadius + (ring.maxRadius - ring.startRadius) * eased;
       // Opacity: fade in quickly (first 15%), then fade out slowly
-      const opacityPeak   = ring.isResponse ? 0.55 : 0.38;
       const fadeIn        = progress < 0.15 ? (progress / 0.15) : 1;
       const fadeOut       = 1 - eased;
-      const opacity       = opacityPeak * fadeIn * fadeOut;
+      const opacity       = ring.opacityPeak * fadeIn * fadeOut;
 
       if (opacity < 0.005 || currentRadius < 1) continue;
 
       ctx.globalAlpha = opacity;
       ctx.strokeStyle = ring.isResponse ? COLORS.ELECTRIC_BLUE : COLORS.WARM_WHITE;
-      ctx.lineWidth   = ring.isResponse ? 0.6 : 0.8;
+      ctx.lineWidth   = ring.isResponse ? 0.8 : 1.2; // Thicker lines for presence
+      
+      // Add subtle glow
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = ctx.strokeStyle;
 
       ctx.beginPath();
       ctx.arc(ring.cx, ring.cy, currentRadius, 0, TWO_PI);
       ctx.stroke();
+      
+      ctx.shadowBlur = 0; // Reset
     }
 
     ctx.globalAlpha = prevAlpha;

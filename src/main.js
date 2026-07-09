@@ -69,6 +69,14 @@ EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
   customCursor.render(tickData.ctx);
 });
 
+// ─── Accessibility ────────────────────────────────────────────────────────────
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (prefersReducedMotion) {
+  // If user prefers reduced motion, disable particles entirely
+  EventBus.emit(EVENTS.PERF_QUALITY_CHANGED, { quality: 'reduced' });
+  // We also set hard limit in ParticleManager manually in next step
+}
+
 // ─── Input Handler ────────────────────────────────────────────────────────────
 /**
  * Single unified input handler.

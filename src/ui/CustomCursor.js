@@ -7,6 +7,8 @@
  */
 
 import { lerp } from '../utils/MathUtils.js';
+import { EventBus } from '../utils/EventBus.js';
+import { EVENTS } from '../constants.js';
 
 export class CustomCursor {
   /**
@@ -15,43 +17,98 @@ export class CustomCursor {
   constructor(coords) {
     this._coords = coords;
 
-    // We lerp the visual position to trail the actual pointer slightly for an organic feel
-    this._vx = coords.pointer.x;
-    this._vy = coords.pointer.y;
+    // Actual pointer position (updated via EventBus)
+    this._targetX = coords.center.x;
+    this._targetY = coords.center.y;
+
+    // We use a critically damped spring for position
+    this._vx = this._targetX;
+    this._vy = this._targetY;
+    
+    // Velocity for the spring
+    this._velX = 0;
+    this._velY = 0;
+
+    // Scale for micro-interactions (click)
+    this._targetScale = 1.0;
+    this._currentScale = 1.0;
+
+    // Device tracking
+    this._isTouch = false;
 
     this.opacity = 1.0;
     this.visible = true;
+    
+    // Have we received the first input? (to prevent drawing before mouse moves)
+    this._hasInput = false;
+
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y, type }) => {
+      this._targetX = x;
+      this._targetY = y;
+      
+      // If it's a touch event, hide the cursor. If it's a mouse, show it.
+      this._isTouch = type.includes('touch');
+      
+      // Shrink slightly on click/down
+      if (type === 'pointerdown' || type === 'touchstart' || type === 'mousedown') {
+        this._currentScale = 0.95;
+      }
+      
+      // Snap to position on first move to prevent lerping from center of screen
+      if (!this._hasInput) {
+        this._vx = x;
+        this._vy = y;
+        this._hasInput = true;
+      }
+    });
   }
 
   /**
    * @param {number} deltaSeconds
    */
   update(deltaSeconds) {
-    if (!this.visible) return;
+    if (!this.visible || !this._hasInput || this._isTouch) return;
 
-    const px = this._coords.pointer.x;
-    const py = this._coords.pointer.y;
+    // 1. Soft Spring Physics for Position
+    // Weightless float: low stiffness, moderate damping
+    const stiffness = 120;
+    const damping = 12;
+    
+    const forceX = (this._targetX - this._vx) * stiffness;
+    const forceY = (this._targetY - this._vy) * stiffness;
+    
+    this._velX += (forceX - this._velX * damping) * deltaSeconds;
+    this._velY += (forceY - this._velY * damping) * deltaSeconds;
+    
+    this._vx += this._velX * deltaSeconds;
+    this._vy += this._velY * deltaSeconds;
 
-    // Only lerp if the mouse has moved on screen
-    if (px !== 0 || py !== 0) {
-      this._vx = lerp(this._vx, px, 20 * deltaSeconds);
-      this._vy = lerp(this._vy, py, 20 * deltaSeconds);
-    }
+    // 2. Click Scale Recovery (fast spring back to 1.0)
+    this._currentScale = lerp(this._currentScale, this._targetScale, 15 * deltaSeconds);
   }
 
   /**
    * @param {CanvasRenderingContext2D} ctx
    */
   render(ctx) {
-    if (!this.visible || this.opacity <= 0) return;
+    if (!this.visible || this.opacity <= 0 || this._isTouch) return;
     if (this._vx === 0 && this._vy === 0) return; // Not initialized yet
+
+    // Calculate squash and stretch based on velocity (max 5%)
+    const speed = Math.sqrt(this._velX * this._velX + this._velY * this._velY);
+    const stretch = Math.min(speed * 0.0002, 0.05); // Cap at 5%
+    const angle = Math.atan2(this._velY, this._velX);
 
     ctx.save();
     ctx.globalAlpha = this.opacity * 0.4; // Very faint
     
+    ctx.translate(this._vx, this._vy);
+    ctx.rotate(angle);
+    ctx.scale(this._currentScale * (1.0 + stretch), this._currentScale * (1.0 - stretch));
+    
     // Draw a tiny, delicate ring
     ctx.beginPath();
-    ctx.arc(this._vx, this._vy, 4, 0, Math.PI * 2);
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
     ctx.strokeStyle = '#F5F0E8';
     ctx.lineWidth = 1.0;
     ctx.stroke();

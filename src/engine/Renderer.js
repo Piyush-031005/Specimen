@@ -94,6 +94,14 @@ export class Renderer {
     /** @type {number} Current background luminosity [0, 1] */
     this._bgLuminosity = 0;
 
+    this._mouseX = window.innerWidth / 2;
+    this._mouseY = window.innerHeight / 2;
+
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+      this._mouseX = x;
+      this._mouseY = y;
+    });
+
     EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stageDef }) => {
       this._bgLuminosity = stageDef.backgroundLuminosity;
     });
@@ -180,30 +188,40 @@ export class Renderer {
     this._tickData.fps          = this._perf.fps;
     this._tickData.quality      = this._perf.quality;
 
-    // ── Clear canvas & draw background gradient ───────────────────────────
+    // ── Clear canvas & draw background distortion ───────────────────────────
     const cx = this._tickData.cssWidth / 2;
     const cy = this._tickData.cssHeight / 2;
 
-    if (this._bgLuminosity > 0) {
-      // Create a soft radial gradient for higher stages
-      const radius = Math.max(cx, cy) * 1.5;
-      const gradient = this._ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      
-      // Interpolate center color based on luminosity (dark to warm gold/white tint)
-      const l = this._bgLuminosity;
-      const r = Math.floor(5 + l * 40);
-      const g = Math.floor(5 + l * 35);
-      const b = Math.floor(5 + l * 25);
-      
-      gradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
-      gradient.addColorStop(1, '#050505'); // Edges remain pitch black
-      
-      this._ctx.fillStyle = gradient;
-    } else {
-      this._ctx.fillStyle = '#050505';
-    }
-    
+    // Base background
+    this._ctx.fillStyle = '#000000';
     this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
+
+    // Gravitational distortion (faint glow following cursor/entity)
+    // Always active, subtly influencing the void
+    const radius = Math.max(cx, cy) * 1.5;
+    
+    // Smoothly track mouse position for the distortion center
+    if (!this._distX) this._distX = cx;
+    if (!this._distY) this._distY = cy;
+    this._distX += (this._mouseX - this._distX) * 2.0 * this._tickData.deltaSeconds;
+    this._distY += (this._mouseY - this._distY) * 2.0 * this._tickData.deltaSeconds;
+    
+    const gradient = this._ctx.createRadialGradient(this._distX, this._distY, 0, cx, cy, radius);
+    
+    // Interpolate center color based on luminosity, but base is a very faint deep space blue/violet
+    const l = this._bgLuminosity;
+    const r = Math.floor(6 + l * 20);
+    const g = Math.floor(8 + l * 20);
+    const b = Math.floor(14 + l * 20);
+    
+    gradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
+    gradient.addColorStop(0.5, 'rgba(3, 4, 6, 0.8)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    this._ctx.globalCompositeOperation = 'screen';
+    this._ctx.fillStyle = gradient;
+    this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
+    this._ctx.globalCompositeOperation = 'source-over';
 
     // ── Emit tick — all subscribers draw here ─────────────────────────────
     EventBus.emit(EVENTS.RENDER_TICK, this._tickData);

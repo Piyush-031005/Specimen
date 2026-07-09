@@ -50,9 +50,19 @@ export class Entity {
       innerRotation:  0,
       driftX:         0,
       driftY:         0,
-      masterOpacity:  0,   // Starts at 0 — fades in on init()
+      masterOpacity:  0,   // Starts at 0
       behaviorState:  BEHAVIOR_STATES.CALM,
     };
+
+    /** @type {number} Current world stage (0-5) */
+    this._worldStage = 0; // Starts in DARKNESS
+
+    /** @type {number|null} Timestamp when entity was born */
+    this._birthTime = null;
+
+    // Cinematic reveal offsets
+    this._cinematicOffsetX = -0.6; // Start significantly off-screen
+    this._cinematicOffsetY = -0.3;
 
     // ─── Systems ──────────────────────────────────────────────────────────
     this._geometry = new Geometry(coords);
@@ -68,6 +78,10 @@ export class Entity {
     // ─── Subscriptions ────────────────────────────────────────────────────
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
       this._state.behaviorState = state;
+    });
+    
+    EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stageDef }) => {
+      this._worldStage = stageDef.stage;
     });
 
     EventBus.on(EVENTS.RESIZE, () => {
@@ -87,20 +101,33 @@ export class Entity {
 
   /**
    * Initialize the entity.
-   * Triggers the fade-in intro via AnimationScheduler.
-   * Call after all systems are wired.
+   * Compresses the birth sequence for immediate impact.
    */
   init() {
-    // Fade entity in from opacity 0 → 1 over 2.4s using smootherstep easing.
-    // Delayed by 600ms — let the black canvas establish the room first.
+    this._birthTime = performance.now();
+    
+    // 0.2s: Instantly appear (masterOpacity = 1)
+    // Geometry logic will handle drawing the core dot first, then the rest.
     this._scheduler.schedule({
-      name:     'entity-fade-in',
-      duration: 2400,
-      delay:    600,
+      name:     'entity-birth',
+      duration: 100,
+      delay:    200,
       easing:   smootherstep,
       onUpdate: (t) => {
         this._state.masterOpacity = t;
       },
+    });
+
+    // 1.0s to 3.0s: The shadow passes and the membrane pulls into the center
+    this._scheduler.schedule({
+      name:     'entity-cinematic-pull',
+      duration: 2000,
+      delay:    1000, // Starts moving at 1.0s
+      easing:   smootherstep,
+      onUpdate: (t) => {
+        this._cinematicOffsetX = -0.6 * (1 - t);
+        this._cinematicOffsetY = -0.3 * (1 - t);
+      }
     });
   }
 
@@ -120,9 +147,9 @@ export class Entity {
     // Cursor lean: in Curious state, entity drifts slightly toward cursor
     this._updateCursorLean(deltaSeconds);
 
-    // Convert world position to screen
-    const worldX = this._state.driftX + this._cursorLean.wx;
-    const worldY = this._state.driftY + this._cursorLean.wy;
+    // Convert world position to screen, incorporating the cinematic reveal offset
+    const worldX = this._state.driftX + this._cursorLean.wx + this._cinematicOffsetX;
+    const worldY = this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
     const screen = this._coords.worldToScreen(worldX, worldY);
 
     // Temporarily translate context to entity's current screen position.
@@ -137,6 +164,8 @@ export class Entity {
       ctx.translate(offsetX, offsetY);
     }
 
+    const timeSinceBirth = this._birthTime ? (performance.now() - this._birthTime) / 1000 : 0;
+
     // Draw geometry
     this._geometry.render(
       ctx,
@@ -145,6 +174,8 @@ export class Entity {
       this._state.masterOpacity,
       this._state.breathScale,
       this._state.behaviorState,
+      this._worldStage,
+      timeSinceBirth
     );
 
     if (offsetX !== 0 || offsetY !== 0) {
@@ -153,20 +184,29 @@ export class Entity {
   }
 
   /**
-   * Lean toward cursor in Curious state, return to neutral otherwise.
+   * Lean toward cursor and react subtly to proximity.
    * @private
    */
   _updateCursorLean(deltaSeconds) {
     const isCurious = this._state.behaviorState === BEHAVIOR_STATES.CURIOUS;
-    const leanStrength = isCurious ? 0.06 : 0;
+    const leanStrength = isCurious ? 0.06 : 0.01; // Always slightly aware now
 
-    // Target lean = a fraction of cursor world position (clamped to avoid large offset)
+    // Target lean = a fraction of cursor world position
     const targetLeanX = Math.max(-0.08, Math.min(0.08, this._cursorWorld.wx * leanStrength));
     const targetLeanY = Math.max(-0.08, Math.min(0.08, this._cursorWorld.wy * leanStrength));
 
-    // Smoothly approach target lean (expDecay for organic feel)
-    const speed = isCurious ? 1.2 : 2.5; // Faster return to center when not curious
+    // Smoothly approach target lean
+    const speed = isCurious ? 1.2 : 2.0; 
     this._cursorLean.wx = lerp(this._cursorLean.wx, targetLeanX, speed * deltaSeconds);
     this._cursorLean.wy = lerp(this._cursorLean.wy, targetLeanY, speed * deltaSeconds);
+
+    // Micro proximity awareness (distance from center)
+    const distSq = this._cursorWorld.wx * this._cursorWorld.wx + this._cursorWorld.wy * this._cursorWorld.wy;
+    // If very close (within 0.3 world units), add a tiny imperceptible skew/rotation modifier to the animator
+    if (distSq < 0.09) {
+      // Pass a subtle intention to the animator's interaction expansion
+      const intensity = (0.09 - distSq) * 0.05; // very tiny
+      this._state.outerRotation += intensity * deltaSeconds;
+    }
   }
 }

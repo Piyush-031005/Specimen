@@ -124,11 +124,13 @@ export class AtmosphereSynth {
         break;
     }
 
-    // Apply the mix gracefully
+    // Apply the mix gracefully using exponential curves (equal-power perception)
     for (let i = 0; i < 4; i++) {
-      // AudioParams don't like ramping to exact 0 with exponentialRampToValueAtTime, use a tiny value
       const val = Math.max(0.001, targetMix[i]);
-      this._gains[i].gain.setTargetAtTime(val, t, transitionTime / 3);
+      // Prevent clicking by anchoring the current value
+      const currentVal = Math.max(0.001, this._gains[i].gain.value);
+      this._gains[i].gain.setValueAtTime(currentVal, t);
+      this._gains[i].gain.exponentialRampToValueAtTime(val, t + transitionTime);
     }
   }
 
@@ -144,7 +146,9 @@ export class AtmosphereSynth {
     const calmMix = [0.3, 0.1, 0.001, 0.1];
 
     for (let i = 0; i < 4; i++) {
-      this._gains[i].gain.setTargetAtTime(calmMix[i], t, transitionTime);
+      const currentVal = Math.max(0.001, this._gains[i].gain.value);
+      this._gains[i].gain.setValueAtTime(currentVal, t);
+      this._gains[i].gain.exponentialRampToValueAtTime(calmMix[i], t + transitionTime);
     }
   }
 }

@@ -160,10 +160,14 @@ export class PulseGenerator {
    */
   _scheduleNext(delayMs) {
     this._clearTimer();
+    // Add tiny temporal randomness (life is not perfectly quantized)
+    const jitter = randomFloat(-35, 35);
+    const finalDelay = Math.max(10, delayMs + jitter);
+    
     this._timer = setTimeout(() => {
       this._timer = null;
       this._emit();
-    }, delayMs);
+    }, finalDelay);
   }
 
   /** @private */
