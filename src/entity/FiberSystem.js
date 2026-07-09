@@ -158,6 +158,13 @@ export class FiberSystem {
   }
 
   /**
+   * Instantly reset the unravel progress (used for the climax reset)
+   */
+  resetUnravel() {
+    this._unravelProgress = 0;
+  }
+
+  /**
    * Render the fibers
    */
   render(ctx, masterOpacity, cx, cy) {

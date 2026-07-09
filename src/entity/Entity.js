@@ -114,6 +114,11 @@ export class Entity {
       this._state.isUnraveled = true;
     });
 
+    EventBus.on('FORCE_RESET_FIBERS', () => {
+      this._state.isUnraveled = false;
+      this._fiberSystem.resetUnravel();
+    });
+
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
       this._onTick(tickData);
     });

@@ -1,22 +1,14 @@
 /**
  * SPECIMEN — SignatureMoment
  *
- * The climax of the experience (Milestone 8).
- * "The boundary between the visitor and the entity briefly disappears."
- *
- * Sequence:
- * 1. World reaches Stage 5 (Contact).
- * 2. Custom cursor fades out organically.
- * 3. Soft light trail connects the cursor to the entity.
- * 4. Entity absorbs the light.
- * 5. 3 seconds of perfect stillness (audio becomes calmer, heartbeat slows).
- * 6. One final pulse.
- * 7. Cursor gently returns.
- * 8. Entity breathing remains permanently calmer.
+ * The climax of the experience (Haunting Reset).
+ * Trust = 90%. Screen cuts to absolute black. Fibers vanish. Silence for 2 seconds.
+ * A single glowing fiber appears on screen. When the user touches it, SNAP.
+ * Screen cuts to the 1px vertical line and trust resets.
  */
 
 import { EventBus } from '../utils/EventBus.js';
-import { EVENTS, WORLD_STAGES } from '../constants.js';
+import { EVENTS, WORLD_STAGES, BEHAVIOR_STATES } from '../constants.js';
 import { lerp } from '../utils/MathUtils.js';
 
 export class SignatureMoment {
@@ -31,17 +23,13 @@ export class SignatureMoment {
     this._memory = memory;
 
     this._isActive = false;
-
-    // Absorption trail state
-    this._trailProgress = 0; // 0 to 1
-    this._cursorFreezePos = { x: 0, y: 0 };
+    this._phase = 0; // 0: off, 1: black/silence, 2: single fiber waiting
     
-    // Global visual effect state (exposure lift / bloom)
-    this._exposureLift = 0; // 0 to 1
+    this._fiberOpacity = 0;
 
     EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stage }) => {
       if (stage === WORLD_STAGES.GLIMPSE) {
-        if (!this._memory._data.signatureMomentSeen) {
+        if (!this._isActive) {
           this._triggerSequence();
         }
       }
@@ -50,6 +38,16 @@ export class SignatureMoment {
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
       this._renderEffects(tickData);
     });
+    
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+      if (this._phase === 2) {
+        const cx = this._coords.center.x;
+        // If cursor crosses the center vertical line
+        if (Math.abs(x - cx) < 30) {
+          this._triggerSnap();
+        }
+      }
+    });
   }
 
   _triggerSequence() {
@@ -57,45 +55,40 @@ export class SignatureMoment {
     this._memory.save();
     
     this._isActive = true;
+    this._phase = 1;
+    this._fiberOpacity = 0;
 
-    // 1. Freeze cursor position
-    this._cursorFreezePos.x = this._cursor._vx;
-    this._cursorFreezePos.y = this._cursor._vy;
-
-    // Broadcast audio/behavior change
+    // Broadcast audio/behavior change - silence everything
     EventBus.emit(EVENTS.SIGNATURE_MOMENT_START);
-
-    // Timeline using pure setTimeout (since this is a one-off scripted sequence)
     
-    // 0ms: Start fading cursor, lift exposure slightly
-    this._animateProperty(this._cursor, 'opacity', 1, 0, 1000);
-    this._animateProperty(this, '_exposureLift', 0, 0.15, 2000);
+    // Hide the cursor
+    this._cursor.opacity = 0;
 
-    // 500ms: Start light trail from cursor to entity
+    // Silence for 2 seconds, then show single glowing fiber
     setTimeout(() => {
-      this._animateProperty(this, '_trailProgress', 0, 1, 2000);
-    }, 500);
-
-    // 3000ms: Absorption complete. 3 seconds of perfect silence/stillness begins.
-    // The AudioEngine is listening to SIGNATURE_MOMENT_START to reduce shimmer and slow heartbeat.
-    setTimeout(() => {
-      this._exposureLift = 0; // Reset exposure lift
-      this._trailProgress = 0; // Hide trail
-    }, 3000);
-
-    // 6000ms: The final, single pulse, then return the cursor.
-    setTimeout(() => {
-      EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now() });
-      EventBus.emit(EVENTS.AUDIO_PULSE_TRIGGER);
-      
-      this._animateProperty(this._cursor, 'opacity', 0, 1, 1500);
-      
-      setTimeout(() => {
-        this._isActive = false;
-        EventBus.emit(EVENTS.SIGNATURE_MOMENT_END);
-      }, 1500);
-
-    }, 6000);
+      if (!this._isActive) return;
+      this._phase = 2;
+      this._animateProperty(this, '_fiberOpacity', 0, 1, 2000);
+    }, 2000);
+  }
+  
+  _triggerSnap() {
+    this._phase = 0;
+    this._isActive = false;
+    
+    // Show cursor again
+    this._cursor.opacity = 1;
+    
+    // Reset Entity state to 1px line
+    EventBus.emit(EVENTS.BEHAVIOR_STATE_CHANGED, { state: BEHAVIOR_STATES.DEFENSIVE });
+    EventBus.emit(EVENTS.BEHAVIOR_TRUST_UPDATED, { trust: 0 });
+    
+    // Tell Audio engine to snap back
+    EventBus.emit(EVENTS.SIGNATURE_MOMENT_END);
+    
+    // Wait wait, I also need to force the entity to unravelProgress = 0!
+    // But since I can't easily access the entity here, I can emit a new event
+    EventBus.emit('FORCE_RESET_FIBERS');
   }
 
   /**
@@ -118,7 +111,7 @@ export class SignatureMoment {
   }
 
   /**
-   * Renders the soft light trail and the subtle exposure lift
+   * Renders the blackout and the single fiber
    * @param {import('../engine/Renderer.js').RenderTickData} tick 
    */
   _renderEffects(tick) {
@@ -130,34 +123,33 @@ export class SignatureMoment {
 
     ctx.save();
 
-    // 1. Render light trail (soft gradient line from cursor to entity)
-    if (this._trailProgress > 0 && this._trailProgress < 1) {
-      // Calculate current head of the trail
-      const headX = lerp(this._cursorFreezePos.x, cx, this._trailProgress);
-      const headY = lerp(this._cursorFreezePos.y, cy, this._trailProgress);
+    // 1. Absolute Blackout overlay
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-      const grad = ctx.createLinearGradient(this._cursorFreezePos.x, this._cursorFreezePos.y, headX, headY);
-      grad.addColorStop(0, 'rgba(245, 240, 232, 0)');
-      grad.addColorStop(1, 'rgba(245, 240, 232, 0.4)');
-
+    // 2. Single glowing fiber
+    if (this._phase === 2 && this._fiberOpacity > 0) {
+      ctx.globalAlpha = this._fiberOpacity;
+      
+      // Glow
+      ctx.shadowColor = 'rgba(245, 240, 232, 0.8)';
+      ctx.shadowBlur = 15;
+      
+      ctx.strokeStyle = 'rgba(245, 240, 232, 1)';
+      ctx.lineWidth = 1;
+      
+      // Slowly breathing vertical sine wave
       ctx.beginPath();
-      ctx.moveTo(this._cursorFreezePos.x, this._cursorFreezePos.y);
-      ctx.lineTo(headX, headY);
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 2;
+      const time = performance.now() * 0.001;
+      for (let y = -50; y < cssHeight + 50; y += 10) {
+        const xOffset = Math.sin(y * 0.01 + time) * 20;
+        if (y === -50) {
+          ctx.moveTo(cx + xOffset, y);
+        } else {
+          ctx.lineTo(cx + xOffset, y);
+        }
+      }
       ctx.stroke();
-
-      // Soft bloom at the head
-      ctx.beginPath();
-      ctx.arc(headX, headY, 10, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(245, 240, 232, 0.1)';
-      ctx.fill();
-    }
-
-    // 2. Render subtle exposure lift / vignette relaxation
-    if (this._exposureLift > 0) {
-      ctx.fillStyle = `rgba(245, 240, 232, ${this._exposureLift})`;
-      ctx.fillRect(0, 0, cssWidth, cssHeight);
     }
 
     ctx.restore();
