@@ -178,4 +178,49 @@ export class AtmosphereSynth {
     // Just re-apply the current stage mix
     this.setStage(currentStage);
   }
+
+  /**
+   * Environmental Echo: A sudden, subtle shift in the audio floor because of accumulated tension.
+   * Almost like the room just got slightly pressurized.
+   */
+  triggerEchoAnomaly(duration) {
+    if (!this._started) return;
+    const t = this._ctx.currentTime;
+    
+    // Dip the fundamental and boost the octave slightly to create an eerie, hollow feeling
+    const echoMix = [0.1, 0.05, 0.15, 0.05];
+    
+    // Very slow, barely perceptible shift into the echo (over 2-3 seconds)
+    for (let i = 0; i < 4; i++) {
+      const currentVal = Math.max(0.001, this._gains[i].gain.value);
+      this._gains[i].gain.setValueAtTime(currentVal, t);
+      this._gains[i].gain.exponentialRampToValueAtTime(echoMix[i], t + 2.5);
+    }
+  }
+
+  /**
+   * Environmental Inertia: Recovering from an echo takes much longer than a normal transition.
+   */
+  endEchoAnomaly(currentStage) {
+    if (!this._started) return;
+    const t = this._ctx.currentTime;
+    const inertiaTime = 8.0; // The world remains subtly altered for a long time
+
+    // Define target mix based on stage (same logic as setStage)
+    let targetMix = [0, 0, 0, 0];
+    switch (currentStage) {
+      case WORLD_STAGES.DARKNESS: targetMix = [0, 0, 0, 0]; break;
+      case WORLD_STAGES.PULSE:    targetMix = [0.3, 0, 0, 0]; break;
+      case WORLD_STAGES.GEOMETRY: targetMix = [0.4, 0.2, 0, 0]; break;
+      case WORLD_STAGES.LIGHT:    targetMix = [0.4, 0.25, 0.15, 0]; break;
+      case WORLD_STAGES.GLIMPSE:  targetMix = [0.4, 0.3, 0.2, 0.2]; break;
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const val = Math.max(0.001, targetMix[i]);
+      const currentVal = Math.max(0.001, this._gains[i].gain.value);
+      this._gains[i].gain.setValueAtTime(currentVal, t);
+      this._gains[i].gain.exponentialRampToValueAtTime(val, t + inertiaTime);
+    }
+  }
 }
