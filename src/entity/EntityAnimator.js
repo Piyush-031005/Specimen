@@ -163,12 +163,18 @@ export class EntityAnimator {
       this._interactionExpansion = randomFloat(0.02, 0.05);
     });
 
-    // ─── Intro Sequence State ────────────────────────────────────────────────
     this._introState = 'hiding'; // 'hiding' -> 'revealed'
     this._timeSinceLoad = 0;
-    this._stillnessTimer = 0;
     this._introRevealed = false;
     
+    this._worldTension = 0;
+    this._worldCertainty = 1.0;
+
+    EventBus.on('WORLD_PHYSICS_UPDATED', ({ tension, certainty }) => {
+       this._worldTension = tension;
+       this._worldCertainty = certainty;
+    });
+
     // ─── Interaction Style Tracking ──────────────────────────────────────────
     this._recentVelocities = [];
     this._lastStyleEvalTime = 0;
@@ -249,7 +255,6 @@ export class EntityAnimator {
       this._lastCursor.x = x;
       this._lastCursor.y = y;
       this._lastCursor.time = now;
-      this._stillnessTimer = 0; // Reset stillness on movement
     });
 
     // Accessibility check
@@ -268,51 +273,32 @@ export class EntityAnimator {
 
     // ── Intro Reveal Logic ──────────────────────────────────────────────
     if (!this._introRevealed) {
-      this._stillnessTimer += deltaSeconds;
-      
-      // If user is perfectly still for 1.0s, OR they have been moving non-stop for 3.0s (inevitability)
-      if (this._stillnessTimer > 1.0 || this._timeSinceLoad > 3.0) {
+      if (this._worldTension > 0.2 || this._timeSinceLoad > 3.0) {
         EventBus.emit(EVENTS.INTRO_REVEALED, {});
       }
     } else {
       // ── Mutual Hesitation (The Standoff) ──────────────────────────────────
-      this._stillnessTimer += deltaSeconds;
+      // Tension comes from the world, not the organism
+      this._state.standoffIntensity = this._worldTension;
       
-      // Evaluate silence meaning when stillness crosses the 0.5s threshold
-      if (this._stillnessTimer > 0.5 && this._stillnessTimer - deltaSeconds <= 0.5) {
-         let avgV = 0;
-         if (this._recentVelocities.length > 0) {
-            let sum = 0;
-            for (let v of this._recentVelocities) sum += v;
-            avgV = sum / this._recentVelocities.length;
-         }
-         
-         if (avgV > 2.0) {
+      if (this._worldTension > 0.2) {
+         if (this._worldCertainty < 0.3) {
             this._state.standoffContext = 'suspicion';
-         } else if (avgV > 0.2) {
-            this._state.standoffContext = 'curiosity';
-         } else {
+         } else if (this._worldCertainty > 0.7) {
             this._state.standoffContext = 'passive';
+         } else {
+            this._state.standoffContext = 'curiosity';
          }
-      }
-      
-      // Apply tension as stillness grows
-      if (this._stillnessTimer > 1.0) {
-         // Tension ramps from 0 to 1 over 4 seconds of waiting
-         this._state.standoffIntensity = clamp((this._stillnessTimer - 1.0) / 4.0, 0, 1.0);
-         
+
          if (this._state.standoffContext === 'suspicion') {
-            // Organism freezes defensively
             this._isHesitating = true;
-            this._hesitationDuration = 0.5; // Renew hesitation
+            this._hesitationDuration = 0.5;
             this._hesitationTimer = 0.5;
             this._targetParams.driftScale = 0.001; // Almost zero drift
          } else if (this._state.standoffContext === 'curiosity') {
-            // Organism freezes attentively
             this._targetParams.driftScale = STATE_ANIM_PARAMS[this._behaviorState].driftScale * (1.0 - this._state.standoffIntensity * 0.8);
          }
       } else {
-         this._state.standoffIntensity = 0;
          this._state.standoffContext = null;
       }
     }
@@ -486,22 +472,17 @@ export class EntityAnimator {
     }
 
     // 3. Probabilistic Evaluation for Vigilance
-    // Vigilance is a rare moment of intense listening when the user is completely still.
-    // It requires patience and anticipation from the visitor.
-    if (this._stillnessTimer > 3.0) {
-       // Check roughly every second (1.5% chance per frame = ~60% chance to check per sec)
+    if (this._worldTension > 0.5) {
+       // Check roughly every second
        if (Math.random() < 0.015) { 
-         // Must have some trust established to enter vigilance (it doesn't listen if it's panicking)
          if (this._memoryData.trust > 30) {
-           // 10% chance to actually enter vigilance once conditions are met
            if (Math.random() < 0.1) {
              this._currentInitiative = 'vigilance';
              this._state.isVigilant = true;
              
-             // Most pauses are 2-4 seconds. Rarely 5-6.
              let duration = randomFloat(2.0, 4.0);
              if (Math.random() < 0.15) {
-                duration = randomFloat(4.5, 6.0); // The rare, uncomfortable silence
+                duration = randomFloat(4.5, 6.0);
              }
              this._initiativeTimer = duration;
              
