@@ -51,7 +51,7 @@ const memory        = new MemorySystem();
 const coords        = new CoordinateSystem();
 const renderer      = new Renderer(canvas);
 const scheduler     = new AnimationScheduler();     // Self-wires to RENDER_TICK
-const particles     = new ParticleManager();        // eslint-disable-line no-unused-vars
+const particles     = new ParticleManager(memory);  // eslint-disable-line no-unused-vars
 const worldEngine   = new WorldEngine();
 const tolerance     = new ToleranceSystem();
 const pulseGen      = new PulseGenerator();
@@ -104,6 +104,7 @@ function handleUserGesture(event) {
 }
 
 window.addEventListener('pointerdown', handleUserGesture, { passive: true });
+window.addEventListener('pointermove', handleUserGesture, { passive: true });
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
@@ -161,6 +162,23 @@ EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs, success }) => {
 // Update the organism's permanent temperament based on interaction style
 EventBus.on(EVENTS.USER_INTERACTION_STYLE, ({ delta }) => {
   memory.updateTemperament(delta);
+});
+
+// Track interaction time and spatial bias
+let lastInputTime = performance.now();
+EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+  const now = performance.now();
+  const dt = (now - lastInputTime) / 1000;
+  
+  if (dt < 2.0) { // Only count genuine continuous interaction, not huge gaps
+    memory.addInteractionTime(dt);
+  }
+  lastInputTime = now;
+
+  // Track spatial bias (normalize coordinates 0-1)
+  const nx = x / window.innerWidth;
+  const ny = y / window.innerHeight;
+  memory.recordSpatialBias(nx, ny);
 });
 
 // ─── Return visitor behavior ──────────────────────────────────────────────────

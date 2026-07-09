@@ -42,7 +42,11 @@ import { valueNoise2D } from '../utils/MathUtils.js';
  */
 
 export class ParticleManager {
-  constructor() {
+  /**
+   * @param {import('../memory/MemorySystem.js').MemorySystem} memory 
+   */
+  constructor(memory) {
+    this._memory = memory;
     // ─── Pool ────────────────────────────────────────────────────────────────
     const poolSize = PERFORMANCE.PARTICLE_POOL_SIZE;
 
@@ -193,28 +197,52 @@ export class ParticleManager {
       const nY = (valueNoise2D(p.y * 0.01 + 100, noiseT) - 0.5) * 2.0;
       
       const noiseIntensity = this._stageDef.particleSpeed * 15;
+      
+      // Calculate habitat maturity and spatial bias flow
+      const maturity = this._memory ? this._memory.getHabitatMaturity() : 0;
+      let biasX = 0;
+      let biasY = 0;
+      if (this._memory) {
+        const d = this._memory.data;
+        // Vector from particle to the favored spatial spot
+        biasX = (d.spatialBiasX * ctx.canvas.width) - p.x;
+        biasY = (d.spatialBiasY * ctx.canvas.height) - p.y;
+        
+        // Normalize the bias vector
+        const bDist = Math.sqrt(biasX * biasX + biasY * biasY) || 1;
+        biasX = (biasX / bDist) * maturity * 25.0; // The older the habitat, the stronger the pull
+        biasY = (biasY / bDist) * maturity * 25.0;
+      }
 
       if (motion === 'inward') {
-        // Slowly drift toward center with noise
+        // Slowly drift toward center with noise, plus the spatial bias
         const dx = cx - p.x;
         const dy = cy - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        p.vx = (dx / dist) * this._stageDef.particleSpeed * 50 + (nX * noiseIntensity);
-        p.vy = (dy / dist) * this._stageDef.particleSpeed * 50 + (nY * noiseIntensity);
+        p.vx = (dx / dist) * this._stageDef.particleSpeed * 50 + (nX * noiseIntensity) + biasX;
+        p.vy = (dy / dist) * this._stageDef.particleSpeed * 50 + (nY * noiseIntensity) + biasY;
       } else if (motion === 'orbital') {
-        // Spiral inward + rotate with noise
+        // Spiral inward + rotate with noise, plus spatial bias
         const dx = cx - p.x;
         const dy = cy - p.y;
         const angle = Math.atan2(dy, dx);
-        p.vx = Math.cos(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nX * noiseIntensity);
-        p.vy = Math.sin(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nY * noiseIntensity);
+        p.vx = Math.cos(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nX * noiseIntensity) + (biasX * 0.7);
+        p.vy = Math.sin(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nY * noiseIntensity) + (biasY * 0.7);
       } else if (motion === 'resonance') {
         // Calm, highly synchronized, slow orbital flow
         const dx = cx - p.x;
         const dy = cy - p.y;
         const angle = Math.atan2(dy, dx);
-        p.vx = Math.cos(angle + 1.5) * this._stageDef.particleSpeed * 60 + (nX * noiseIntensity * 0.5);
-        p.vy = Math.sin(angle + 1.5) * this._stageDef.particleSpeed * 60 + (nY * noiseIntensity * 0.5);
+        
+        // At high maturity, the environment breathes slightly with the organism
+        let breathFlow = 1.0;
+        if (maturity > 0.5) {
+          // Subtle pulse based on time (matches organism's base breath speed roughly)
+          breathFlow = 1.0 + Math.sin(p.age * 0.5) * (maturity * 0.2);
+        }
+        
+        p.vx = Math.cos(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nX * noiseIntensity * 0.5) + (biasX * 0.5);
+        p.vy = Math.sin(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nY * noiseIntensity * 0.5) + (biasY * 0.5);
       }
 
       // Apply velocity

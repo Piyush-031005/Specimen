@@ -85,6 +85,42 @@ export class MemorySystem {
   }
 
   /**
+   * Track the visitor's preferred area of the screen (0.0 to 1.0 normalized coordinates)
+   * Drifts slowly over time toward the current cursor position.
+   */
+  recordSpatialBias(nx, ny) {
+    // Very slow learning rate (e.g., takes minutes of holding a spot to heavily bias it)
+    const learningRate = 0.0005;
+    this._data.spatialBiasX += (nx - this._data.spatialBiasX) * learningRate;
+    this._data.spatialBiasY += (ny - this._data.spatialBiasY) * learningRate;
+  }
+
+  /**
+   * Accumulate genuine interaction time.
+   */
+  addInteractionTime(deltaSeconds) {
+    this._data.totalInteractionTime += deltaSeconds;
+  }
+
+  /**
+   * Calculate habitat maturity [0.0, 1.0].
+   * It takes ~5-10 minutes of genuine interaction to fully mature the habitat.
+   * Trust and temperament also act as multipliers.
+   */
+  getHabitatMaturity() {
+    // 300 seconds (5 mins) = 1.0 maturity baseline
+    let timeMaturity = Math.min(this._data.totalInteractionTime / 300, 1.0);
+    
+    // Higher trust accelerates maturity
+    const trustFactor = 1.0 + (this._data.trust / 100);
+    
+    // Temperament (-1 to 1) -> 0.8 to 1.2
+    const temperamentFactor = 1.0 + (this._data.temperament * 0.2);
+
+    return Math.min(1.0, timeMaturity * trustFactor * temperamentFactor);
+  }
+
+  /**
    * Update world stage in memory.
    * @param {number} stage
    */
