@@ -36,6 +36,7 @@ import { valueNoise2D } from '../utils/MathUtils.js';
  * @property {number} opacity   — [0, 1]
  * @property {number} age       — Seconds since spawn
  * @property {number} maxAge    — Seconds until particle expires
+ * @property {number} anomalyTimer — Seconds remaining for a historical echo glitch
  * @property {number} r         — Color R [0, 255]
  * @property {number} g         — Color G [0, 255]
  * @property {number} b         — Color B [0, 255]
@@ -64,6 +65,7 @@ export class ParticleManager {
         opacity: 0,
         age: 0,
         maxAge: 1,
+        anomalyTimer: 0,
         r: 255, g: 255, b: 255,
       };
     }
@@ -161,6 +163,7 @@ export class ParticleManager {
         p.opacity = 1;
         p.age     = 0;
         p.maxAge  = maxAge;
+        p.anomalyTimer = 0;
         p.r       = r;
         p.g       = g;
         p.b       = b;
@@ -211,63 +214,73 @@ export class ParticleManager {
       
       const noiseIntensity = this._stageDef.particleSpeed * 15;
       
-      // Calculate habitat maturity and spatial bias flow
-      const maturity = this._memory ? this._memory.getHabitatMaturity() : 0;
-      let biasX = 0;
-      let biasY = 0;
+      // ─── Environmental Echo (The Scent of History) ───
+      let anomalyDamping = 1.0;
+      let anomalyFlicker = 1.0;
+
       if (this._memory) {
-        const d = this._memory.data;
-        // Vector from particle to the favored spatial spot
-        biasX = (d.spatialBiasX * ctx.canvas.width) - p.x;
-        biasY = (d.spatialBiasY * ctx.canvas.height) - p.y;
-        
-        // Normalize the bias vector
-        const bDist = Math.sqrt(biasX * biasX + biasY * biasY) || 1;
-        biasX = (biasX / bDist) * maturity * 25.0; // The older the habitat, the stronger the pull
-        biasY = (biasY / bDist) * maturity * 25.0;
+        // Read the continuous tension field at this particle's location
+        const pnx = p.x / ctx.canvas.width;
+        const pny = p.y / ctx.canvas.height;
+        const tension = this._memory.getHistoricalTension(pnx, pny);
+
+        if (tension > 0.05) {
+          // Extremely rare probability that the tension overflows into a visible echo
+          if (Math.random() < 0.0001 * tension) {
+            p.anomalyTimer = 2.0 + Math.random() * 4.0; // Stuck for 2-6 seconds
+          }
+        }
+
+        if (p.anomalyTimer > 0) {
+          p.anomalyTimer -= deltaSeconds;
+          anomalyDamping = 0.02; // Slows to an almost complete halt
+          // Ghostly flicker — right on the edge of perception
+          anomalyFlicker = Math.random() > 0.85 ? 0.4 : 1.0; 
+          
+          // Occasionally the world alerts the organism that history is surfacing
+          if (Math.random() < 0.01) {
+             EventBus.emit('WORLD_ECHO_SURFACED', { type: 'particle', x: p.x, y: p.y });
+          }
+        }
       }
 
       if (motion === 'inward') {
-        // Slowly drift toward center with noise, plus the spatial bias
         const dx = cx - p.x;
         const dy = cy - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        p.vx = (dx / dist) * this._stageDef.particleSpeed * 50 + (nX * noiseIntensity) + biasX;
-        p.vy = (dy / dist) * this._stageDef.particleSpeed * 50 + (nY * noiseIntensity) + biasY;
+        p.vx = (dx / dist) * this._stageDef.particleSpeed * 50 + (nX * noiseIntensity);
+        p.vy = (dy / dist) * this._stageDef.particleSpeed * 50 + (nY * noiseIntensity);
       } else if (motion === 'orbital') {
-        // Spiral inward + rotate with noise, plus spatial bias
         const dx = cx - p.x;
         const dy = cy - p.y;
         const angle = Math.atan2(dy, dx);
-        p.vx = Math.cos(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nX * noiseIntensity) + (biasX * 0.7);
-        p.vy = Math.sin(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nY * noiseIntensity) + (biasY * 0.7);
+        p.vx = Math.cos(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nX * noiseIntensity);
+        p.vy = Math.sin(angle + 1.2) * this._stageDef.particleSpeed * 80 + (nY * noiseIntensity);
       } else if (motion === 'resonance') {
-        // Calm, highly synchronized, slow orbital flow
         const dx = cx - p.x;
         const dy = cy - p.y;
         const angle = Math.atan2(dy, dx);
         
-        // At high maturity, the environment breathes slightly with the organism
         let breathFlow = 1.0;
+        const maturity = this._memory ? this._memory.getHabitatMaturity() : 0;
         if (maturity > 0.5) {
-          // Subtle pulse based on time (matches organism's base breath speed roughly)
           breathFlow = 1.0 + Math.sin(p.age * 0.5) * (maturity * 0.2);
         }
         
-        p.vx = Math.cos(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nX * noiseIntensity * 0.5) + (biasX * 0.5);
-        p.vy = Math.sin(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nY * noiseIntensity * 0.5) + (biasY * 0.5);
+        p.vx = Math.cos(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nX * noiseIntensity * 0.5);
+        p.vy = Math.sin(angle + 1.5) * this._stageDef.particleSpeed * 60 * breathFlow + (nY * noiseIntensity * 0.5);
       }
 
       // Smoothly interpolate vigilance multiplier
       this._vigilanceMultiplier += (this._vigilanceTarget - this._vigilanceMultiplier) * (deltaSeconds * 2.0);
 
-      // Apply velocity with vigilance damping
-      p.x += p.vx * deltaSeconds * this._vigilanceMultiplier;
-      p.y += p.vy * deltaSeconds * this._vigilanceMultiplier;
+      // Apply velocity with vigilance damping AND historical anomaly damping
+      p.x += p.vx * deltaSeconds * this._vigilanceMultiplier * anomalyDamping;
+      p.y += p.vy * deltaSeconds * this._vigilanceMultiplier * anomalyDamping;
 
-      // Opacity fade-out (sine curve for smooth in/out)
+      // Opacity fade-out (sine curve for smooth in/out) modulated by anomaly flicker
       const lifeProgress = p.age / p.maxAge;
-      p.opacity = Math.sin(lifeProgress * Math.PI) * this._stageDef.particleOpacityMax;
+      p.opacity = Math.sin(lifeProgress * Math.PI) * this._stageDef.particleOpacityMax * anomalyFlicker;
 
       count++;
     }
