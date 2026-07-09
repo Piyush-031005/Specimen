@@ -21,7 +21,7 @@
 
 import { EventBus } from '../utils/EventBus.js';
 import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
-import { EVENTS } from '../constants.js';
+import { EVENTS, REALITY_LAWS } from '../constants.js';
 
 /** Maximum delta time spike to clamp (ms). Prevents jank after tab switches. */
 const MAX_DELTA_MS = 100;
@@ -97,6 +97,9 @@ export class Renderer {
     this._mouseX = window.innerWidth / 2;
     this._mouseY = window.innerHeight / 2;
 
+    this._worldCertainty = 1.0;
+    this._darknessRadius = 100; // Starts small (closed in)
+
     EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
       this._mouseX = x;
       this._mouseY = y;
@@ -104,6 +107,10 @@ export class Renderer {
 
     EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stageDef }) => {
       this._bgLuminosity = stageDef.backgroundLuminosity;
+    });
+
+    EventBus.on('WORLD_PHYSICS_UPDATED', ({ certainty }) => {
+      this._worldCertainty = certainty;
     });
   }
 
@@ -222,6 +229,24 @@ export class Renderer {
     this._ctx.fillStyle = gradient;
     this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
     this._ctx.globalCompositeOperation = 'source-over';
+
+    if (REALITY_LAWS.LIVING_DARKNESS) {
+      // The Physics: Darkness has immense inertia, guided by certainty.
+      // Target radius: max when certainty is high, tiny when certainty is 0.
+      const maxRadius = Math.max(cx, cy) * 1.5;
+      const targetRadius = 100 + (maxRadius * this._worldCertainty);
+      
+      const decaySpeed = 0.3; // extremely slow liquid inertia
+      this._darknessRadius = this._darknessRadius + (targetRadius - this._darknessRadius) * (1.0 - Math.exp(-decaySpeed * this._tickData.deltaSeconds));
+
+      const darkGradient = this._ctx.createRadialGradient(this._distX, this._distY, this._darknessRadius * 0.2, this._distX, this._distY, this._darknessRadius);
+      darkGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      darkGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.8)');
+      darkGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+      this._ctx.fillStyle = darkGradient;
+      this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
+    }
 
     // ── Emit tick — all subscribers draw here ─────────────────────────────
     EventBus.emit(EVENTS.RENDER_TICK, this._tickData);
