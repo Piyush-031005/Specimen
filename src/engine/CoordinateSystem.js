@@ -53,11 +53,13 @@ export class CoordinateSystem {
     });
 
     this._tension = 0;
+    this._contrastMultiplier = 0.1;
     this._threatPoint = { x: this._centerX, y: this._centerY };
 
-    EventBus.on('WORLD_PHYSICS_UPDATED', ({ tension, threatPoint }) => {
+    EventBus.on('WORLD_PHYSICS_UPDATED', ({ tension, threatPoint, contrastMultiplier }) => {
       this._tension = tension;
       this._threatPoint = threatPoint;
+      this._contrastMultiplier = contrastMultiplier || 0.1;
     });
   }
 
@@ -82,10 +84,11 @@ export class CoordinateSystem {
       
       if (dist > 0.01) {
         // Tension causes space to shrink inwards towards the threat (max 8% compression)
-        // Only elements reasonably close feel it strongly
+        // Contrast principle: only full compression when contrastMultiplier is high
         const compressionRange = this._halfUnit * 2.0; 
         const influence = Math.max(0, 1.0 - (dist / compressionRange));
-        const squeeze = 1.0 - (this._tension * influence * 0.08);
+        const effectiveTension = this._tension * this._contrastMultiplier;
+        const squeeze = 1.0 - (effectiveTension * influence * 0.08);
 
         sx = this._threatPoint.x + dx * squeeze;
         sy = this._threatPoint.y + dy * squeeze;
@@ -115,7 +118,8 @@ export class CoordinateSystem {
       if (dist > 0.01) {
         const compressionRange = this._halfUnit * 2.0; 
         const influence = Math.max(0, 1.0 - (dist / compressionRange));
-        const squeeze = 1.0 - (this._tension * influence * 0.08);
+        const effectiveTension = this._tension * this._contrastMultiplier;
+        const squeeze = 1.0 - (effectiveTension * influence * 0.08);
         
         // This is an approximation of the inverse, sufficient for hit testing/interaction
         uncompressedX = this._threatPoint.x + dx / squeeze;

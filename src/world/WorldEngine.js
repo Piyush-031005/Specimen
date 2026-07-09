@@ -32,6 +32,7 @@ export class WorldEngine {
     this._recentVelocities = [];
     this._lastCursor = { x: -1, y: -1, time: 0 };
     this._threatPoint = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    this._cumulativeDistance = 0;
 
     EventBus.on(EVENTS.USER_INPUT, ({ x, y, timestamp }) => {
       if (this._lastCursor.x !== -1) {
@@ -41,7 +42,9 @@ export class WorldEngine {
         const dt = timestamp - this._lastCursor.time;
 
         if (dt > 0) {
-          const velocity = Math.sqrt(distSq) / dt;
+          const dist = Math.sqrt(distSq);
+          this._cumulativeDistance += dist;
+          const velocity = dist / dt;
           this._recentVelocities.push(velocity);
           if (this._recentVelocities.length > 20) this._recentVelocities.shift();
         }
@@ -137,10 +140,14 @@ export class WorldEngine {
     const decay = targetCertainty < this._certainty ? 8.0 : 0.5;
     this._certainty = expDecay(this._certainty, targetCertainty, decay, deltaSeconds);
 
+    // Contrast Principle: First movement is normal (0.1x tension), builds up to full (1.0x) after ~2000px of movement
+    const contrastMultiplier = clamp((this._cumulativeDistance - 100) / 2000.0, 0.1, 1.0);
+
     EventBus.emit('WORLD_PHYSICS_UPDATED', {
       tension: this._tension,
       certainty: this._certainty,
-      threatPoint: this._threatPoint
+      threatPoint: this._threatPoint,
+      contrastMultiplier: contrastMultiplier
     });
   }
 
