@@ -8,6 +8,7 @@
 
 import { COLORS } from '../constants.js';
 import { randomFloat, lerp, expDecay } from '../utils/MathUtils.js';
+import { EventBus } from '../utils/EventBus.js';
 
 export class FiberSystem {
   constructor(coords, memory) {
