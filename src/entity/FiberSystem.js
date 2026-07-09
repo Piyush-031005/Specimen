@@ -79,7 +79,7 @@ export class FiberSystem {
   /**
    * Update fiber physics
    */
-  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState) {
+  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill) {
     // Spring toward unraveled state
     const targetProgress = isUnraveled ? 1.0 : 0.0;
     // Violent snap out, slow retraction in
@@ -124,8 +124,17 @@ export class FiberSystem {
       f.currEndY = targetEndY;
       
       // Control point logic
-      const unraveledCpX = finalTargetCpX + (f.cpOffsetX * tensionMod);
-      const unraveledCpY = finalTargetCpY + (f.cpOffsetY * tensionMod);
+      let unraveledCpX = finalTargetCpX + (f.cpOffsetX * tensionMod);
+      let unraveledCpY = finalTargetCpY + (f.cpOffsetY * tensionMod);
+      
+      if (isCursorStill) {
+        // Swirl around the cursor (impossible intention)
+        const angle = (i / this._numFibers) * Math.PI * 2 + (performance.now() * 0.0005 * f.speed);
+        const radius = 60 * tensionMod;
+        unraveledCpX = finalTargetCpX + Math.cos(angle) * radius;
+        unraveledCpY = finalTargetCpY + Math.sin(angle) * radius;
+        breathMod *= 0.5; // Calm the breathing down while swirling
+      }
       
       // Add breathing noise
       const breath = Math.sin(performance.now() * 0.001 * f.speed + f.phase) * 20 * this._unravelProgress * breathMod;

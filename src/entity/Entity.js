@@ -78,6 +78,8 @@ export class Entity {
     /** @type {{ wx: number, wy: number }} Smoothed cursor lean */
     this._cursorLean  = { wx: 0, wy: 0 };
 
+    this._lastInputTime = null;
+
     // ─── Subscriptions ────────────────────────────────────────────────────
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
       this._state.behaviorState = state;
@@ -95,6 +97,7 @@ export class Entity {
       const { wx, wy } = coords.screenToWorld(x, y);
       this._cursorWorld.wx = wx;
       this._cursorWorld.wy = wy;
+      this._lastInputTime = performance.now();
     });
 
     EventBus.on(EVENTS.FIBER_PLUCK, ({ velocityX, yPos }) => {
@@ -151,8 +154,11 @@ export class Entity {
     const targetWorldCpY = this._cursorWorld.wy + this._state.driftY;
     const targetScreenCp = this._coords.worldToScreen(targetWorldCpX, targetWorldCpY);
 
+    const idleMs = this._lastInputTime ? (performance.now() - this._lastInputTime) : 0;
+    const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
+
     // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState);
+    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill);
 
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.
