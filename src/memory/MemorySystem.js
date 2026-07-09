@@ -87,10 +87,23 @@ export class MemorySystem {
     const targetAsym = 1.0 + (temp * 0.1);
     sig.breathAsymmetry += (targetAsym - sig.breathAsymmetry) * 0.01;
 
-    // Drift Bias: slowly biased by where they prefer to interact (spatialBias)
-    // If they interact right, it slowly drifts right.
-    const targetDriftX = (this._data.spatialBiasX - 0.5) * 2; // -1 to 1
-    const targetDriftY = (this._data.spatialBiasY - 0.5) * 2;
+    // Drift Bias: slowly biased by the center of historical tension.
+    // We can approximate the center of mass of the history field.
+    let sumX = 0, sumY = 0, totalW = 0;
+    const field = this._data.historyField || DEFAULT_SESSION_DATA.historyField;
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const w = field[y * 4 + x];
+        sumX += (x / 3) * w;
+        sumY += (y / 3) * w;
+        totalW += w;
+      }
+    }
+    const avgX = totalW > 0 ? sumX / totalW : 0.5;
+    const avgY = totalW > 0 ? sumY / totalW : 0.5;
+
+    const targetDriftX = (avgX - 0.5) * 2; // -1 to 1
+    const targetDriftY = (avgY - 0.5) * 2;
     sig.driftBiasX += (targetDriftX - sig.driftBiasX) * 0.01;
     sig.driftBiasY += (targetDriftY - sig.driftBiasY) * 0.01;
 
@@ -118,14 +131,71 @@ export class MemorySystem {
   }
 
   /**
-   * Track the visitor's preferred area of the screen (0.0 to 1.0 normalized coordinates)
-   * Drifts slowly over time toward the current cursor position.
+   * Accumulate historical tension by lingering in a specific spot.
+   * Diffuses naturally into the 4x4 field.
+   * @param {number} nx - Normalized X (0.0 to 1.0)
+   * @param {number} ny - Normalized Y (0.0 to 1.0)
+   * @param {number} amount - The amount of tension to add (e.g. deltaSeconds * 0.05)
    */
-  recordSpatialBias(nx, ny) {
-    // Very slow learning rate (e.g., takes minutes of holding a spot to heavily bias it)
-    const learningRate = 0.0005;
-    this._data.spatialBiasX += (nx - this._data.spatialBiasX) * learningRate;
-    this._data.spatialBiasY += (ny - this._data.spatialBiasY) * learningRate;
+  diffuseHistory(nx, ny, amount) {
+    if (!this._data.historyField) this._data.historyField = [...DEFAULT_SESSION_DATA.historyField];
+    const field = this._data.historyField;
+    
+    // Map nx, ny to grid space [0, 3]
+    const gx = nx * 3;
+    const gy = ny * 3;
+
+    // Distribute tension to the 4 nearest nodes (bilinear distribution)
+    const x0 = Math.floor(gx);
+    const x1 = Math.min(3, x0 + 1);
+    const y0 = Math.floor(gy);
+    const y1 = Math.min(3, y0 + 1);
+
+    const tx = gx - x0;
+    const ty = gy - y0;
+
+    const w00 = (1 - tx) * (1 - ty);
+    const w10 = tx * (1 - ty);
+    const w01 = (1 - tx) * ty;
+    const w11 = tx * ty;
+
+    // Apply and cap at 1.0 (Maximum tension)
+    field[y0 * 4 + x0] = Math.min(1.0, field[y0 * 4 + x0] + amount * w00);
+    field[y0 * 4 + x1] = Math.min(1.0, field[y0 * 4 + x1] + amount * w10);
+    field[y1 * 4 + x0] = Math.min(1.0, field[y1 * 4 + x0] + amount * w01);
+    field[y1 * 4 + x1] = Math.min(1.0, field[y1 * 4 + x1] + amount * w11);
+  }
+
+  /**
+   * Reads the accumulated continuous tension at any point in space.
+   * @param {number} nx - Normalized X
+   * @param {number} ny - Normalized Y
+   * @returns {number} Tension [0.0 to 1.0]
+   */
+  getHistoricalTension(nx, ny) {
+    if (!this._data.historyField) return 0.0;
+    const field = this._data.historyField;
+    
+    const gx = Math.max(0, Math.min(3, nx * 3));
+    const gy = Math.max(0, Math.min(3, ny * 3));
+
+    const x0 = Math.floor(gx);
+    const x1 = Math.min(3, x0 + 1);
+    const y0 = Math.floor(gy);
+    const y1 = Math.min(3, y0 + 1);
+
+    const tx = gx - x0;
+    const ty = gy - y0;
+
+    const v00 = field[y0 * 4 + x0];
+    const v10 = field[y0 * 4 + x1];
+    const v01 = field[y1 * 4 + x0];
+    const v11 = field[y1 * 4 + x1];
+
+    // Bilinear interpolation
+    const top = v00 * (1 - tx) + v10 * tx;
+    const bot = v01 * (1 - tx) + v11 * tx;
+    return top * (1 - ty) + bot * ty;
   }
 
   /**

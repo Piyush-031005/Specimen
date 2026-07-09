@@ -30,8 +30,7 @@
  * @property {number} temperament          — The organism's permanent disposition toward the visitor [-1.0 (Guarded) to 1.0 (Playful)]
  * @property {number} sessionCount         — Total number of visits
  * @property {number} totalInteractionTime — Total seconds of active engagement across all sessions
- * @property {number} spatialBiasX         — Accumulated cursor center of mass X (normalized 0-1)
- * @property {number} spatialBiasY         — Accumulated cursor center of mass Y (normalized 0-1)
+ * @property {number[]} historyField       — 4x4 continuous field of accumulated historical tension (diffused)
  * @property {RhythmFingerprint} fingerprint — The visitor's behavioral profile
  * @property {IdentitySignature} identitySignature — The organism's permanent microscopic physical biases
  * @property {number} lastVisitTimestamp   — Date.now() of last session
@@ -46,8 +45,12 @@ export const DEFAULT_SESSION_DATA = Object.freeze({
   temperament: 0.0,
   sessionCount: 0,
   totalInteractionTime: 0,
-  spatialBiasX: 0.5,
-  spatialBiasY: 0.5,
+  historyField: [
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+  ],
   fingerprint: {
     avgTempoMs: 0,
     varianceMs: 0,

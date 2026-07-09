@@ -10,8 +10,9 @@ import { COLORS } from '../constants.js';
 import { randomFloat, lerp, expDecay } from '../utils/MathUtils.js';
 
 export class FiberSystem {
-  constructor(coords) {
+  constructor(coords, memory) {
     this._coords = coords;
+    this._memory = memory;
     this._fibers = [];
     this._numFibers = 250;
     
@@ -84,7 +85,11 @@ export class FiberSystem {
         currEndX: cx,
         currEndY: h + 50,
         currCpX: cx,
-        currCpY: cy
+        currCpY: cy,
+        
+        // Environmental echo state
+        phantomTwitchTimer: 0,
+        phantomTwitchX: 0
       });
     }
   }
@@ -146,6 +151,31 @@ export class FiberSystem {
     
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
+      
+      // ─── Environmental Echoes (The Phantom Twitch) ───
+      // If the fiber's control point is resting in an area of high historical tension, it might twitch.
+      if (this._memory && this._unravelProgress === 1.0) {
+         if (f.phantomTwitchTimer > 0) {
+            f.phantomTwitchTimer -= deltaSeconds;
+         } else {
+            // Read tension at this fiber's current control point
+            const pnx = f.currCpX / this._coords.cssWidth;
+            const pny = f.currCpY / this._coords.cssHeight;
+            const tension = this._memory.getHistoricalTension(pnx, pny);
+            
+            if (tension > 0.05) {
+               // Rare probability per fiber
+               if (Math.random() < 0.00005 * tension) {
+                  f.phantomTwitchTimer = randomFloat(0.3, 0.8);
+                  f.phantomTwitchX = (Math.random() - 0.5) * 60.0; // Sudden violent jerk
+                  
+                  if (Math.random() < 0.02) {
+                     EventBus.emit('WORLD_ECHO_SURFACED', { type: 'fiber' });
+                  }
+               }
+            }
+         }
+      }
       
       // Behavior overrides
       let finalTargetCpX = targetCpX;
@@ -225,7 +255,7 @@ export class FiberSystem {
         unraveledCpY = cy;
       }
       
-      const targetCurrentCpX = lerp(cx, unraveledCpX + breath, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0);
+      const targetCurrentCpX = lerp(cx, unraveledCpX + breath, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0) + (f.phantomTwitchTimer > 0 ? f.phantomTwitchX : 0);
       const targetCurrentCpY = lerp(cy, unraveledCpY + breath, this._unravelProgress);
       
       // Defensive state snaps quickly, calm state flows slowly
@@ -249,7 +279,7 @@ export class FiberSystem {
   /**
    * Render the fibers
    */
-  render(ctx, masterOpacity, cx, cy, introState) {
+  render(ctx, masterOpacity, cx, cy, introState, temperament = 0.0) {
     if (masterOpacity <= 0.001) return;
 
     if (introState === 'hiding') {

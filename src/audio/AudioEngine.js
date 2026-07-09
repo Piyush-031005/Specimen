@@ -14,7 +14,11 @@ import { PulseSynth } from './PulseSynth.js';
 import { AtmosphereSynth } from './AtmosphereSynth.js';
 
 export class AudioEngine {
-  constructor() {
+  /**
+   * @param {import('../memory/MemorySystem.js').MemorySystem} memory 
+   */
+  constructor(memory) {
+    this._memory = memory;
     this._ctx = new (window.AudioContext || window.webkitAudioContext)();
     
     // Master compressor to prevent clipping
@@ -27,6 +31,9 @@ export class AudioEngine {
 
     this._unlocked = false;
     this._currentTrust = 0;
+    this._cursorNx = 0.5;
+    this._cursorNy = 0.5;
+    this._anomalyTimer = 0;
 
     // We must listen for interaction to unlock audio
     this._unlockHandler = this._unlock.bind(this);
@@ -82,11 +89,38 @@ export class AudioEngine {
     });
 
     EventBus.on('VIGILANCE_END', () => {
-      // Need to restore based on the current world stage. We don't track it locally, 
-      // but we can ask the synth to re-apply it if we just save the last stage.
-      // Wait, AtmosphereSynth.vigilanceEnd needs the stage.
-      // Let's track _currentWorldStage in AudioEngine.
       this._atmosphereSynth.vigilanceEnd(this._currentWorldStage || 0);
+    });
+
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+      this._cursorNx = x / window.innerWidth;
+      this._cursorNy = y / window.innerHeight;
+    });
+
+    // Environmental Echoes
+    EventBus.on(EVENTS.RENDER_TICK, ({ deltaSeconds }) => {
+      if (!this._memory || !this._unlocked) return;
+
+      const tension = this._memory.getHistoricalTension(this._cursorNx, this._cursorNy);
+
+      if (tension > 0.05 && this._anomalyTimer <= 0) {
+        // Extremely rare probability of audio dipping based on accumulated tension
+        if (Math.random() < 0.00005 * tension) {
+          this._anomalyTimer = 3.0 + Math.random() * 5.0; // Audio shifts for 3-8 seconds
+          this._atmosphereSynth.triggerEchoAnomaly(this._anomalyTimer);
+          
+          if (Math.random() < 0.02) {
+             EventBus.emit('WORLD_ECHO_SURFACED', { type: 'audio' });
+          }
+        }
+      }
+
+      if (this._anomalyTimer > 0) {
+        this._anomalyTimer -= deltaSeconds;
+        if (this._anomalyTimer <= 0) {
+           this._atmosphereSynth.endEchoAnomaly(this._currentWorldStage || 0);
+        }
+      }
     });
   }
 

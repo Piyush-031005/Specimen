@@ -146,6 +146,18 @@ export class EntityAnimator {
       this._calmMultiplier = 0.6; // Permanently calm the entity down after M8
     });
 
+    EventBus.on('WORLD_ECHO_SURFACED', ({ type }) => {
+      // The organism sometimes notices the world history glitching
+      // It reacts with sudden stillness / hesitation
+      if (Math.random() < 0.5) { // 50% chance to notice
+         if (!this._isHesitating && this._behaviorState !== BEHAVIOR_STATES.DEFENSIVE) {
+            this._isHesitating = true;
+            this._hesitationDuration = randomFloat(0.6, 1.5); // A deep, startled hesitation
+            this._hesitationTimer = this._hesitationDuration;
+         }
+      }
+    });
+
     EventBus.on(EVENTS.AUDIO_MATCH_TRIGGER, () => {
       // Subtle heartbeat expansion (max 2-5%)
       this._interactionExpansion = randomFloat(0.02, 0.05);

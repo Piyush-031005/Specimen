@@ -58,8 +58,8 @@ const pulseGen      = new PulseGenerator();
 const pulseRenderer = new PulseRenderer(coords);   // eslint-disable-line no-unused-vars
 const rhythmMatcher = new RhythmMatcher(tolerance); // eslint-disable-line no-unused-vars
 const behavior      = new BehaviorEngine(memory);
-const audio         = new AudioEngine();
-const entity        = new Entity(coords, scheduler);
+const audio         = new AudioEngine(memory);
+const entity        = new Entity(coords, scheduler, memory);
 const hint          = new HintLayer(hintEl);
 const customCursor  = new CustomCursor(coords);
 const signatureMoment = new SignatureMoment(customCursor, coords, memory);
@@ -166,6 +166,10 @@ EventBus.on(EVENTS.USER_INTERACTION_STYLE, ({ delta }) => {
 
 // Track interaction time and spatial bias
 let lastInputTime = performance.now();
+let currentNx = 0.5;
+let currentNy = 0.5;
+let cursorStillTime = 0;
+
 EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
   const now = performance.now();
   const dt = (now - lastInputTime) / 1000;
@@ -176,9 +180,20 @@ EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
   lastInputTime = now;
 
   // Track spatial bias (normalize coordinates 0-1)
-  const nx = x / window.innerWidth;
-  const ny = y / window.innerHeight;
-  memory.recordSpatialBias(nx, ny);
+  currentNx = x / window.innerWidth;
+  currentNy = y / window.innerHeight;
+  cursorStillTime = 0; // Reset stillness because they moved
+});
+
+// Accumulate history purely based on lingering
+EventBus.on(EVENTS.RENDER_TICK, ({ deltaSeconds }) => {
+  cursorStillTime += deltaSeconds;
+  // If the visitor is perfectly still for more than 1 second, they are lingering.
+  // We accumulate historical tension in this specific conceptual space.
+  if (cursorStillTime > 1.0) {
+    // Diffuse slowly. It takes ~200 seconds of total lingering in a spot to max out its tension.
+    memory.diffuseHistory(currentNx, currentNy, deltaSeconds * 0.005);
+  }
 });
 
 // ─── Return visitor behavior ──────────────────────────────────────────────────
