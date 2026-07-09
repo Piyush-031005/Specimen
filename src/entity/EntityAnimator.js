@@ -130,8 +130,17 @@ export class EntityAnimator {
     // Listen for behavior state changes
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
       this._behaviorState = state;
-      this._targetParams = STATE_ANIM_PARAMS[state] ?? STATE_ANIM_PARAMS[BEHAVIOR_STATES.CALM];
+      // When behavior state naturally changes, we reset the target params
+      // Initiative actions can override these temporarily.
+      this._targetParams = { ...STATE_ANIM_PARAMS[state] ?? STATE_ANIM_PARAMS[BEHAVIOR_STATES.CALM] };
     });
+
+    /** @type {string|null} Current autonomous action (e.g. 'reach', 'observe', 'freeze') */
+    this._currentInitiative = null;
+    this._initiativeTimer = 0;
+    
+    // For Memory access to calculate habitat safety
+    this._memoryData = null;
 
     EventBus.on(EVENTS.SIGNATURE_MOMENT_END, () => {
       this._calmMultiplier = 0.6; // Permanently calm the entity down after M8
@@ -155,6 +164,7 @@ export class EntityAnimator {
 
     EventBus.on(EVENTS.MEMORY_LOADED, ({ data }) => {
       this._temperament = data.temperament || 0.0;
+      this._memoryData = data;
     });
 
     EventBus.on(EVENTS.INTRO_REVEALED, () => {
@@ -262,6 +272,9 @@ export class EntityAnimator {
 
     // ── Intentional imperfection — reaction to startling movement ──────────────
     this._tickHesitation(deltaSeconds);
+    
+    // ── Probabilistic Initiative & Habitat Safety ─────────────────────────────
+    this._evaluateInitiative(deltaSeconds);
 
     const hesitationMod = this._isHesitating ? 0.15 : 1.0;
 
@@ -347,6 +360,103 @@ export class EntityAnimator {
       if (this._hesitationTimer <= 0) {
         this._isHesitating = false;
       }
+    }
+  }
+
+  /**
+   * Evaluates if the organism should take autonomous action.
+   * Driven by intrinsic motivation (safety, trust, stillness, temperament).
+   * @private
+   */
+  _evaluateInitiative(deltaSeconds) {
+    if (!this._introRevealed || !this._memoryData) return;
+    
+    // 1. Calculate Habitat Safety
+    // The safe zone is the spatial bias (where the user usually interacts).
+    // The organism is at (0.5, 0.5) roughly.
+    const orgX = 0.5;
+    const orgY = 0.5;
+    const biasX = this._memoryData.spatialBiasX || 0.5;
+    const biasY = this._memoryData.spatialBiasY || 0.5;
+    
+    const dx = orgX - biasX;
+    const dy = orgY - biasY;
+    const distToSafeZone = Math.sqrt(dx * dx + dy * dy);
+    // max distance is ~0.707. Normalize to 0 (unsafe) to 1 (safe).
+    const habitatSafety = 1.0 - Math.min(1.0, distToSafeZone / 0.7);
+
+    // Deep Habitat Influence: 
+    // If unsafe, it freezes (movement decreases, observes cautiously)
+    if (habitatSafety < 0.3) {
+       this._targetParams.driftScale = STATE_ANIM_PARAMS[this._behaviorState].driftScale * 0.2;
+    } else {
+       this._targetParams.driftScale = STATE_ANIM_PARAMS[this._behaviorState].driftScale;
+    }
+
+    // 2. Tick current initiative action if active
+    if (this._currentInitiative) {
+      this._initiativeTimer -= deltaSeconds;
+      if (this._initiativeTimer <= 0) {
+        this._currentInitiative = null;
+        // Restore normal params
+        this._targetParams = { ...STATE_ANIM_PARAMS[this._behaviorState] };
+      }
+      
+      // Apply initiative overrides
+      if (this._currentInitiative === 'reach') {
+         // Subtly reach out: higher drift, deeper breath
+         this._targetParams.driftScale = STATE_ANIM_PARAMS[this._behaviorState].driftScale * 2.5;
+         this._targetParams.breathAmplitude = STATE_ANIM_PARAMS[this._behaviorState].breathAmplitude * 1.5;
+      } else if (this._currentInitiative === 'observe') {
+         // Pause breathing, slight rotation spike to 'look', no drift
+         this._targetParams.breathSpeed = 0.05;
+         this._targetParams.driftScale = 0;
+         this._targetParams.rotationSpeed = STATE_ANIM_PARAMS[this._behaviorState].rotationSpeed * 3.0;
+      }
+      return; // Already taking action
+    }
+
+    // 3. Probabilistic Evaluation
+    // Only evaluate if completely still for > 4 seconds
+    if (this._stillnessTimer > 4.0) {
+       // Evaluate sporadically (~45% chance per second to make a decision check)
+       if (Math.random() < 0.01) { 
+         // Why did the organism decide to do this now?
+         // Motivation = 50% Trust + 30% Temperament + 20% Habitat Safety
+         const motivationScore = (this._memoryData.trust / 100) * 0.5 + 
+                                 ((this._temperament + 1) / 2) * 0.3 + 
+                                 habitatSafety * 0.2;
+
+         if (motivationScore > 0.7) {
+           // Motivation: The organism feels completely safe and trusted. It wants contact.
+           if (Math.random() < 0.6) {
+             this._currentInitiative = 'reach';
+             this._initiativeTimer = randomFloat(2.0, 4.0);
+           } else {
+             // Sometimes it just watches you peacefully
+             this._currentInitiative = 'observe';
+             this._initiativeTimer = randomFloat(1.5, 3.0);
+           }
+         } else if (motivationScore < 0.3) {
+           // Motivation: The organism feels unsafe or traumatized. It is deeply suspicious of the stillness.
+           if (Math.random() < 0.6) {
+             // It flinches, expecting a sudden movement
+             this._isHesitating = true;
+             this._hesitationDuration = randomFloat(0.3, 0.7);
+             this._hesitationTimer = this._hesitationDuration;
+           } else {
+             // It freezes to observe the threat
+             this._currentInitiative = 'observe';
+             this._initiativeTimer = randomFloat(2.0, 4.0);
+           }
+         } else {
+           // Motivation: Neutral. It's unsure what to do, so it just observes cautiously.
+           if (Math.random() < 0.4) {
+             this._currentInitiative = 'observe';
+             this._initiativeTimer = randomFloat(1.0, 2.5);
+           }
+         }
+       }
     }
   }
 }
