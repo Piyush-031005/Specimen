@@ -121,11 +121,15 @@ export class WorldEngine {
       variance /= this._recentVelocities.length;
     }
 
-    // Tension rises when the room is waiting in silence (standoff)
-    if (this._cursorStillness > 1.0) {
-      this._tension = clamp((this._cursorStillness - 1.0) / 4.0, 0, 1.0);
+    // Film Cut: Standoff triggers on intention, not just a timer. 
+    // Intention = They were moving, and now they are deliberately still.
+    // Tension builds non-linearly: Nothing... Nothing... Everything. (Math.pow 3)
+    if (this._cursorStillness > 0.5 && avgV < 0.2) {
+      let rawTension = clamp((this._cursorStillness - 0.5) / 3.0, 0, 1.0);
+      this._tension = Math.pow(rawTension, 3); 
     } else {
-      this._tension = 0;
+      // Film Cut: Release = Relief. Tension should decay slowly ("Maybe I was wrong") instead of dropping instantly.
+      this._tension = expDecay(this._tension, 0, 2.0, deltaSeconds);
     }
 
     // Certainty drops when movement is highly erratic/unpredictable
