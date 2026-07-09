@@ -79,7 +79,7 @@ export class FiberSystem {
   /**
    * Update fiber physics
    */
-  update(deltaSeconds, isUnraveled, targetCpX, targetCpY) {
+  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState) {
     // Spring toward unraveled state
     const targetProgress = isUnraveled ? 1.0 : 0.0;
     // Violent snap out, slow retraction in
@@ -94,11 +94,29 @@ export class FiberSystem {
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
       
-      // Target anchor points based on unravel progress
-      const targetStartX = lerp(cx, f.tStartX, this._unravelProgress);
-      const targetStartY = lerp(-50, f.tStartY, this._unravelProgress);
-      const targetEndX = lerp(cx, f.tEndX, this._unravelProgress);
-      const targetEndY = lerp(h + 50, f.tEndY, this._unravelProgress);
+      // Behavior overrides
+      let finalTargetCpX = targetCpX;
+      let finalTargetCpY = targetCpY;
+      let breathMod = 1.0;
+      let tensionMod = 1.0;
+
+      if (behaviorState === 'defensive') {
+        // Pull tightly into a central knot, ignore cursor
+        finalTargetCpX = cx;
+        finalTargetCpY = cy;
+        breathMod = 0.2; // Rigid, short needles
+        tensionMod = 0.5; // Pull anchors closer to center
+      } else if (behaviorState === 'trusting' || behaviorState === 'curious') {
+        // Soft silk reaching completely out
+        breathMod = 1.5;
+        tensionMod = 1.2;
+      }
+
+      // Target anchor points based on unravel progress and tension
+      const targetStartX = lerp(cx, lerp(cx, f.tStartX, tensionMod), this._unravelProgress);
+      const targetStartY = lerp(-50, lerp(cy, f.tStartY, tensionMod), this._unravelProgress);
+      const targetEndX = lerp(cx, lerp(cx, f.tEndX, tensionMod), this._unravelProgress);
+      const targetEndY = lerp(h + 50, lerp(cy, f.tEndY, tensionMod), this._unravelProgress);
       
       f.currStartX = targetStartX;
       f.currStartY = targetStartY;
@@ -106,17 +124,19 @@ export class FiberSystem {
       f.currEndY = targetEndY;
       
       // Control point logic
-      const unraveledCpX = targetCpX + f.cpOffsetX;
-      const unraveledCpY = targetCpY + f.cpOffsetY;
+      const unraveledCpX = finalTargetCpX + (f.cpOffsetX * tensionMod);
+      const unraveledCpY = finalTargetCpY + (f.cpOffsetY * tensionMod);
       
       // Add breathing noise
-      const breath = Math.sin(performance.now() * 0.001 * f.speed + f.phase) * 20 * this._unravelProgress;
+      const breath = Math.sin(performance.now() * 0.001 * f.speed + f.phase) * 20 * this._unravelProgress * breathMod;
       
       const targetCurrentCpX = lerp(cx, unraveledCpX + breath, this._unravelProgress);
       const targetCurrentCpY = lerp(cy, unraveledCpY + breath, this._unravelProgress);
       
-      f.currCpX = expDecay(f.currCpX, targetCurrentCpX, 10.0, deltaSeconds);
-      f.currCpY = expDecay(f.currCpY, targetCurrentCpY, 10.0, deltaSeconds);
+      // Defensive state snaps quickly, calm state flows slowly
+      const responseSpeed = behaviorState === 'defensive' ? 15.0 : 5.0;
+      f.currCpX = expDecay(f.currCpX, targetCurrentCpX, responseSpeed, deltaSeconds);
+      f.currCpY = expDecay(f.currCpY, targetCurrentCpY, responseSpeed, deltaSeconds);
     }
   }
 

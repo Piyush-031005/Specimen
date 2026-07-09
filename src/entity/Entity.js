@@ -152,7 +152,7 @@ export class Entity {
     const targetScreenCp = this._coords.worldToScreen(targetWorldCpX, targetWorldCpY);
 
     // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y);
+    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState);
 
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.
