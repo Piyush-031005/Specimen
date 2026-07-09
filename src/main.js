@@ -150,6 +150,11 @@ entity.init();
 // 7. Pulse generator starts (first pulse after TIMING.FIRST_PULSE_DELAY_MS)
 pulseGen.start();
 
+// The Impossible Observation (Scene 1): Prove reality exists before interaction
+setTimeout(() => {
+  EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
+}, 3000);
+
 // 8. Hint layer timer begins (shows '...' after 12s idle)
 hint.start();
 
