@@ -92,7 +92,7 @@ export class FiberSystem {
   /**
    * Update fiber physics
    */
-  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState) {
+  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0) {
     // Determine target progress
     let targetProgress = isUnraveled ? 1.0 : 0.0;
     
@@ -165,6 +165,18 @@ export class FiberSystem {
         // Cursor feels dangerous / powerful. Fibers reach deeply.
         breathMod = 1.8;
         tensionMod = 1.5 * hierarchyMod; // Arterial fibers reach closer to cursor
+      }
+
+      // Temperament directly limits how relaxed the organism can be.
+      // If temperament is negative (guarded), it stays tense even when supposedly calm.
+      // If positive (playful), it reaches out even further.
+      if (temperament < 0) {
+        tensionMod *= (1.0 + (temperament * 0.4)); // e.g., -1.0 means tension drops by 40% (tighter knot)
+        // Control point is pulled back towards center (reluctant to reach for cursor)
+        finalTargetCpX = lerp(finalTargetCpX, cx, Math.abs(temperament) * 0.6);
+        finalTargetCpY = lerp(finalTargetCpY, cy, Math.abs(temperament) * 0.6);
+      } else {
+        tensionMod *= (1.0 + (temperament * 0.3)); // Reaches out 30% further
       }
 
       // Target anchor points based on unravel progress and tension
@@ -293,8 +305,13 @@ export class FiberSystem {
       // Modulate opacity by unravel progress and fiber's base opacity
       const opacity = f.baseOpacity * masterOpacity * (0.1 + this._unravelProgress * 0.9);
       
+      // Temperament affects line width. Guarded (-1) = Thicker, defensive. Playful (+1) = Thinner, delicate.
+      const lineWidthMod = temperament < 0 
+        ? 1.0 + (Math.abs(temperament) * 0.5) 
+        : 1.0 - (temperament * 0.2);
+
       ctx.globalAlpha = opacity;
-      ctx.lineWidth = f.lineWidth;
+      ctx.lineWidth = f.lineWidth * lineWidthMod;
       ctx.strokeStyle = 'rgba(245, 240, 232, 1)';
       
       ctx.beginPath();

@@ -147,6 +147,15 @@ export class EntityAnimator {
     this._timeSinceLoad = 0;
     this._stillnessTimer = 0;
     this._introRevealed = false;
+    
+    // ─── Interaction Style Tracking ──────────────────────────────────────────
+    this._recentVelocities = [];
+    this._lastStyleEvalTime = 0;
+    this._temperament = 0.0; // [-1.0, 1.0] Guarded -> Curious
+
+    EventBus.on(EVENTS.MEMORY_LOADED, ({ data }) => {
+      this._temperament = data.temperament || 0.0;
+    });
 
     EventBus.on(EVENTS.INTRO_REVEALED, () => {
       this._introRevealed = true;
@@ -170,6 +179,38 @@ export class EntityAnimator {
           // If the movement was deliberate enough (not just a jitter)
           if (Math.abs(dx) > 5) {
             EventBus.emit(EVENTS.FIBER_PLUCK, { velocityX: dx / Math.max(1, dt), yPos: y });
+          }
+        }
+
+        if (dt > 0) {
+          const velocity = Math.sqrt(distSq) / dt; // pixels per ms
+          this._recentVelocities.push(velocity);
+          
+          if (now - this._lastStyleEvalTime > 1000) {
+             let sum = 0;
+             for (let v of this._recentVelocities) sum += v;
+             const avgV = sum / this._recentVelocities.length;
+             
+             // Evaluate temperament shift based on interaction style
+             let delta = 0;
+             if (avgV > 2.5) {
+               // Frantic, aggressive movement
+               delta = -0.1;
+             } else if (avgV > 0.1 && avgV <= 1.0) {
+               // Slow, deliberate, gentle movement
+               delta = 0.05;
+             } else if (this._recentVelocities.length < 15) {
+               // Very few movements over the second = patience
+               delta = 0.02;
+             }
+
+             if (delta !== 0) {
+               this._temperament = Math.max(-1.0, Math.min(1.0, this._temperament + delta));
+               EventBus.emit(EVENTS.USER_INTERACTION_STYLE, { delta });
+             }
+             
+             this._recentVelocities = [];
+             this._lastStyleEvalTime = now;
           }
         }
 
@@ -226,9 +267,22 @@ export class EntityAnimator {
 
     // ── Breathing (scale oscillation) ─────────────────────────────────────
     // Uses organicSine — has subtle asymmetry, feels like a real breath.
-    const currentBreathSpeed = p.breathSpeed * this._calmMultiplier;
+    
+    // Temperament modifier
+    // Guarded (-1): fast, shallow breath. Playful (+1): slow, deep breath.
+    let speedMod = 1.0;
+    let ampMod = 1.0;
+    if (this._temperament < 0) {
+      speedMod = 1.0 + (Math.abs(this._temperament) * 0.5); // Up to 50% faster
+      ampMod = 1.0 - (Math.abs(this._temperament) * 0.3); // Up to 30% shallower
+    } else {
+      speedMod = 1.0 - (this._temperament * 0.3); // Up to 30% slower
+      ampMod = 1.0 + (this._temperament * 0.4); // Up to 40% deeper
+    }
+
+    const currentBreathSpeed = p.breathSpeed * this._calmMultiplier * speedMod;
     const breathRaw = organicSine(this._time, currentBreathSpeed, this._breathPhase);
-    const breathValue = breathRaw * p.breathAmplitude;
+    const breathValue = breathRaw * (p.breathAmplitude * ampMod);
     
     // Decay the interaction expansion quickly (120-180ms feel)
     this._interactionExpansion = expDecay(this._interactionExpansion, 0, 15, deltaSeconds);

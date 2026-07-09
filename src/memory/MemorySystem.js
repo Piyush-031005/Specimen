@@ -76,6 +76,15 @@ export class MemorySystem {
   }
 
   /**
+   * Shift the organism's permanent temperament based on interaction style.
+   * -1.0 (Guarded/Reserved) to 1.0 (Playful/Curious)
+   * @param {number} delta 
+   */
+  updateTemperament(delta) {
+    this._data.temperament = Math.max(-1.0, Math.min(1.0, this._data.temperament + delta));
+  }
+
+  /**
    * Update world stage in memory.
    * @param {number} stage
    */

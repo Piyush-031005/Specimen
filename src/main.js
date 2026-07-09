@@ -158,6 +158,11 @@ EventBus.on(EVENTS.USER_PULSE_RESPONSE, ({ responseTimeMs, success }) => {
   memory.recordInteraction(success, responseTimeMs);
 });
 
+// Update the organism's permanent temperament based on interaction style
+EventBus.on(EVENTS.USER_INTERACTION_STYLE, ({ delta }) => {
+  memory.updateTemperament(delta);
+});
+
 // ─── Return visitor behavior ──────────────────────────────────────────────────
 // If this is not the first visit, seed trust from memory.
 // The entity will already be in a slightly warmer state, calculated via real-time decay.

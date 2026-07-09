@@ -48,6 +48,7 @@ export const EVENTS = Object.freeze({
   // Input
   USER_INPUT: 'input:user',          // Raw pointer/touch/key event
   USER_PULSE_RESPONSE: 'input:pulse_response', // Deliberate rhythm response
+  USER_INTERACTION_STYLE: 'input:interaction_style', // Evaluated interaction style
 
   // Entity
   INTRO_REVEALED: 'entity:intro_revealed',
