@@ -98,192 +98,35 @@ export class Geometry {
     // 1.0s - 2.0s: Geometry draws in
     const drawProgress = Math.max(0, Math.min(1, timeSinceBirth - 1.0));
 
-    // ── Stage 0: The Core (Rigid Geometric Shards in Darkness) ─────────────────────────────
-    if (stage >= 0) {
-      if (drawProgress > 0) {
-        // Draw sharp shards that counter-rotate
-        this._drawTriangle(ctx, cx, cy, midR, innerRotation, 0.8, COLORS.WARM_WHITE, drawProgress);
-        this._drawTriangle(ctx, cx, cy, midR * 0.7, outerRotation + Math.PI, 0.6, COLORS.ELECTRIC_BLUE, drawProgress);
-      }
-      // Core singularity
-      if (timeSinceBirth > 0.2) {
-        ctx.shadowColor = COLORS.SOFT_VIOLET;
-        ctx.globalAlpha = masterOpacity * (stage === 4 ? 0.4 : 0.9);
-        ctx.fillStyle   = COLORS.SOFT_VIOLET;
-        ctx.beginPath();
-        ctx.arc(cx, cy, coreR * 0.2, 0, TWO_PI);
-        ctx.fill();
-        ctx.shadowColor = COLORS.ELECTRIC_BLUE;
-      }
-    }
+    const drawProgress = Math.max(0, Math.min(1, timeSinceBirth - 1.0));
 
-    // ── Stage 1: The Body (Liquid Glass Membrane begins pulsing) ──────────────────
-    if (stage >= 1 && drawProgress > 0) {
-      // Fluid, undulating membrane that encapsulates the rigid core
-      this._drawMembrane(ctx, cx, cy, outerR, timeSinceBirth, 0.5, COLORS.WARM_WHITE, drawProgress);
-      // Faint secondary membrane for glass refraction effect
-      this._drawMembrane(ctx, cx, cy, outerR * 1.05, timeSinceBirth * 1.2, 0.2, COLORS.ELECTRIC_BLUE, drawProgress);
-    }
-
-    // ── Stage 2: The Structure (Internal Confinement) ────────────────────────────────────
-    if (stage >= 2 && drawProgress > 0) {
-      // An impossible outer geometric cage holding the fluid membrane
-      this._drawRing(ctx, cx, cy, outerR * 1.15, 0.3, COLORS.WARM_WHITE, drawProgress);
-    }
-
-    // ── Stage 3 & 4: The Nervous System (Neural Flashes) ──────────────────────────────
-    if (stage >= 3 && drawProgress > 0) {
-      // Flashes of light connecting the core to the membrane (communication)
-      // Faster when curious, calmer when accepting
-      const flashSpeed = behaviorState === 'CURIOUS' ? 4.0 : 1.5;
-      this._drawNeuralFlashes(ctx, cx, cy, coreR, outerR, timeSinceBirth * flashSpeed, 0.6, drawProgress);
-    }
-
-    // ── Stage 4 (Max): Acceptance (Stillness) ────────────────────────────────────
-    // Emotion is conveyed through reduced breathing and stillness in EntityAnimator.
+    // ── The Sentient Fiber Foundation ─────────────────────────────
+    // Stage 0: A single 1-pixel vertical line spanning the screen.
+    // It looks like a UI mistake, until it breathes.
     
+    ctx.strokeStyle = COLORS.WARM_WHITE;
+    ctx.lineWidth = 1.0;
+    
+    // Additive blending for pure light
+    ctx.globalCompositeOperation = 'screen';
+    
+    // The line spans the entire height of the viewport
+    const height = this._coords._height; // Need access to screen height, assuming coords has it or we use fixed large number
+    const lineLength = 2000; 
+    
+    // Subtle breathing/vibration (The Unease)
+    const vibration = Math.sin(timeSinceBirth * 30) * (breathScale - 1.0) * 10;
+    
+    ctx.beginPath();
+    ctx.moveTo(cx + vibration, cy - lineLength / 2);
+    ctx.lineTo(cx - vibration, cy + lineLength / 2);
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   }
 
-  // ─── Private drawing primitives ───────────────────────────────────────────
 
-  /**
-   * Draw a circular ring (stroke only).
-   * @private
-   */
-  _drawRing(ctx, cx, cy, radius, opacity, color, drawProgress = 1) {
-    ctx.globalAlpha = this._clampedOpacity(opacity);
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = 0.7;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + TWO_PI * drawProgress);
-    ctx.stroke();
-  }
-
-  /**
-   * Draw an equilateral triangle centered at (cx, cy) with given radius.
-   * @private
-   */
-  _drawTriangle(ctx, cx, cy, radius, rotation, opacity, color, drawProgress = 1) {
-    ctx.globalAlpha = this._clampedOpacity(opacity);
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = 0.8;
-    ctx.beginPath();
-
-    const totalLength = 3;
-    const drawAmount = drawProgress * totalLength;
-
-    for (let i = 0; i < 3; i++) {
-      if (drawAmount <= i) break;
-      
-      const angle1 = rotation + i * (TWO_PI / 3);
-      const angle2 = rotation + (i + 1) * (TWO_PI / 3);
-      
-      const px1 = cx + Math.cos(angle1) * radius;
-      const py1 = cy + Math.sin(angle1) * radius;
-      
-      const px2 = cx + Math.cos(angle2) * radius;
-      const py2 = cy + Math.sin(angle2) * radius;
-
-      if (i === 0) ctx.moveTo(px1, py1);
-
-      if (drawAmount >= i + 1) {
-        ctx.lineTo(px2, py2);
-      } else {
-        const segProgress = drawAmount - i;
-        ctx.lineTo(
-          px1 + (px2 - px1) * segProgress,
-          py1 + (py2 - py1) * segProgress
-        );
-      }
-    }
-
-    ctx.stroke();
-  }
-
-  /**
-   * Draw the liquid glass membrane (a continuous, undulating fluid spline).
-   * @private
-   */
-  _drawMembrane(ctx, cx, cy, radius, time, opacity, color, drawProgress = 1) {
-    ctx.globalAlpha = this._clampedOpacity(opacity);
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = 0.6;
-    
-    // Additive blending for a glass-like refractive overlap
-    ctx.globalCompositeOperation = 'screen';
-    
-    ctx.beginPath();
-    const segments = 24;
-    const maxDrawPoints = Math.max(1, Math.floor(segments * drawProgress));
-    
-    let firstPx = 0, firstPy = 0;
-    
-    for (let i = 0; i <= maxDrawPoints; i++) {
-      const angle = (i / segments) * TWO_PI;
-      // Fluid undulation using sine waves of different frequencies
-      const noise = Math.sin(angle * 3 + time * 1.2) * 0.04 + 
-                    Math.cos(angle * 5 - time * 0.8) * 0.02;
-      
-      const r = radius * (1 + noise);
-      const px = cx + Math.cos(angle) * r;
-      const py = cy + Math.sin(angle) * r;
-      
-      if (i === 0) {
-        ctx.moveTo(px, py);
-        firstPx = px;
-        firstPy = py;
-      } else {
-        // Control point for smooth bezier (pulling slightly outward to round the curve)
-        const prevAngle = ((i - 0.5) / segments) * TWO_PI;
-        const prevNoise = Math.sin(prevAngle * 3 + time * 1.2) * 0.04 + 
-                          Math.cos(prevAngle * 5 - time * 0.8) * 0.02;
-        const cpR = radius * (1 + prevNoise) * 1.05;
-        const cpx = cx + Math.cos(prevAngle) * cpR;
-        const cpy = cy + Math.sin(prevAngle) * cpR;
-        
-        ctx.quadraticCurveTo(cpx, cpy, px, py);
-      }
-    }
-    
-    ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over'; // reset
-  }
-
-  /**
-   * Draw neural flashes bridging the core and membrane.
-   * @private
-   */
-  _drawNeuralFlashes(ctx, cx, cy, coreRadius, membraneRadius, time, opacity, drawProgress = 1) {
-    ctx.globalAlpha = this._clampedOpacity(opacity);
-    ctx.strokeStyle = COLORS.ELECTRIC_BLUE;
-    ctx.lineWidth   = 0.4;
-    
-    const numFlashes = 5;
-    for (let i = 0; i < numFlashes; i++) {
-      // Create sporadic firing using a high-frequency sine threshold
-      const firePhase = Math.sin(time * 3 + i * 2.1);
-      if (firePhase > 0.95) {
-        const angle = (time * 0.5 + i * PI_OVER_3) % TWO_PI;
-        
-        const x1 = cx + Math.cos(angle) * coreRadius;
-        const y1 = cy + Math.sin(angle) * coreRadius;
-        const x2 = cx + Math.cos(angle) * membraneRadius * drawProgress;
-        const y2 = cy + Math.sin(angle) * membraneRadius * drawProgress;
-        
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        
-        // Add a lightning-like mid-point zigzag
-        const mx = cx + Math.cos(angle + 0.1) * (coreRadius + membraneRadius) * 0.5;
-        const my = cy + Math.sin(angle + 0.1) * (coreRadius + membraneRadius) * 0.5;
-        
-        ctx.lineTo(mx, my);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-    }
-  }
 
   /**
    * Apply master opacity as a multiplier.
