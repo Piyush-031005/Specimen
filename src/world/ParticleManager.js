@@ -119,6 +119,11 @@ export class ParticleManager {
       this._vigilanceTarget = 1.0;
     });
 
+    this._activePulses = [];
+    EventBus.on('ACTIVE_PULSES', ({ rings }) => {
+      this._activePulses = rings;
+    });
+
     this._vigilanceTarget = 1.0;
 
     EventBus.on(EVENTS.RENDER_TICK, ({ ctx, deltaSeconds }) => {
@@ -278,9 +283,25 @@ export class ParticleManager {
       p.x += p.vx * deltaSeconds * this._vigilanceMultiplier * anomalyDamping;
       p.y += p.vy * deltaSeconds * this._vigilanceMultiplier * anomalyDamping;
 
-      // Opacity fade-out (sine curve for smooth in/out) modulated by anomaly flicker
+      // Film Cut: Discovery is memory. Base opacity is extremely low.
+      let pulseIllumination = 0;
+      if (this._activePulses.length > 0) {
+        for (let ring of this._activePulses) {
+          const dx = p.x - ring.cx;
+          const dy = p.y - ring.cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const distFromRing = Math.abs(dist - ring.radius);
+          if (distFromRing < 50) { // 50px reveal width
+            pulseIllumination = Math.max(pulseIllumination, 1.0 - (distFromRing / 50));
+          }
+        }
+      }
+
       const lifeProgress = p.age / p.maxAge;
-      p.opacity = Math.sin(lifeProgress * Math.PI) * this._stageDef.particleOpacityMax * anomalyFlicker;
+      const normalOpacity = Math.sin(lifeProgress * Math.PI) * this._stageDef.particleOpacityMax;
+      
+      // Mix the pulse illumination with the anomaly flicker
+      p.opacity = Math.max(normalOpacity * 0.1, pulseIllumination) * anomalyFlicker;
 
       count++;
     }

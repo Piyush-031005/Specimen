@@ -156,25 +156,30 @@ export class PulseRenderer {
     }
     if (!hasActive) return;
 
-    const prevAlpha = ctx.globalAlpha;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    
+    const activeRingsData = [];
 
     for (let i = 0; i < POOL_SIZE; i++) {
       const ring = pool[i];
       if (!ring.active) continue;
 
       const progress      = ring.age / ring.maxAge;
-      const eased         = smootherstep(progress);
-      const currentRadius = ring.startRadius + (ring.maxRadius - ring.startRadius) * eased;
-      // Opacity: fade in quickly (first 15%), then fade out slowly
-      const fadeIn        = progress < 0.15 ? (progress / 0.15) : 1;
-      const fadeOut       = 1 - eased;
-      const opacity       = ring.opacityPeak * fadeIn * fadeOut;
+      // Use easeOutQuart so it explodes fast then drifts slowly
+      const easeOut       = 1 - Math.pow(1 - progress, 4);
+      const currentRadius = ring.startRadius + (ring.maxRadius - ring.startRadius) * easeOut;
+      
+      activeRingsData.push({ cx: ring.cx, cy: ring.cy, radius: currentRadius });
+
+      // Opacity fades linearly as it expands, starting from peak
+      const opacity = ring.opacityPeak * (1 - progress);
 
       if (opacity < 0.005 || currentRadius < 1) continue;
 
       ctx.globalAlpha = opacity;
       ctx.strokeStyle = ring.isResponse ? COLORS.ELECTRIC_BLUE : COLORS.WARM_WHITE;
-      ctx.lineWidth   = ring.isResponse ? 0.8 : 1.2; // Thicker lines for presence
+      ctx.lineWidth   = 1.0;
       
       // Add subtle glow
       ctx.shadowBlur = 15;
@@ -187,7 +192,10 @@ export class PulseRenderer {
       ctx.shadowBlur = 0; // Reset
     }
 
-    ctx.globalAlpha = prevAlpha;
+    ctx.restore();
+    
+    // Film Cut: Discovery is memory. Emit active pulses so the world can reveal invisible elements.
+    EventBus.emit('ACTIVE_PULSES', { rings: activeRingsData });
   }
 
   /**
