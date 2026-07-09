@@ -115,9 +115,9 @@ export class FiberSystem {
     
     // Math-based Overshoot logic (Shock Phase)
     let recoilOvershoot = 0;
-    if (isUnraveled && timeSinceUnravel < 400) {
-      // Violent spike to 1.5x scale in the first 150ms, then slams back to 1.0
-      const t = timeSinceUnravel / 400; // 0 to 1
+    if (isUnraveled && timeSinceUnravel < 200) {
+      // Film Cut: Compress Pluck recoil to 200ms for punchiness
+      const t = timeSinceUnravel / 200; // 0 to 1
       recoilOvershoot = Math.sin(t * Math.PI) * (1 - t) * 1.5; 
       globalSpringSpeed = 40.0; // Inevitable, massive velocity
     } else if (isUnraveled) {
