@@ -74,54 +74,17 @@ export class Geometry {
    * @param {number} stage               — World stage (1 to 5)
    * @param {number} timeSinceBirth      — Seconds since entity was initialized
    */
-  render(ctx, outerRotation, innerRotation, masterOpacity, breathScale, behaviorState, stage = 1, timeSinceBirth = 100) {
+  render(ctx, outerRotation, innerRotation, masterOpacity, breathScale, behaviorState, stage = 1, timeSinceBirth = 100, fiberSystem) {
     if (masterOpacity <= 0.001) return;
 
     const cx  = this._center.x;
     const cy  = this._center.y;
     const s   = breathScale;
 
-    const outerR = this._radii.outer * s;
-    const midR   = this._radii.mid   * s;
-    const coreR  = this._radii.core  * s;
-
-    ctx.save();
-    ctx.globalAlpha = masterOpacity;
-    
-    // Add soft glow
-    ctx.shadowBlur = stage === 5 ? 10 : 25; // Reduce spectacle at stage 5
-    ctx.shadowColor = COLORS.ELECTRIC_BLUE;
-
-    // Time-based construction logic
-    // 0.0s - 0.2s: Nothing
-    // 0.2s - 1.0s: Core dot only
-    // 1.0s - 2.0s: Geometry draws in
-    const drawProgress = Math.max(0, Math.min(1, timeSinceBirth - 1.0));
-
-    // ── The Sentient Fiber Foundation ─────────────────────────────
-    // Stage 0: A single 1-pixel vertical line spanning the screen.
-    // It looks like a UI mistake, until it breathes.
-    
-    ctx.strokeStyle = COLORS.WARM_WHITE;
-    ctx.lineWidth = 1.0;
-    
-    // Additive blending for pure light
-    ctx.globalCompositeOperation = 'screen';
-    
-    // The line spans the entire height of the viewport
-    const height = this._coords._height; // Need access to screen height, assuming coords has it or we use fixed large number
-    const lineLength = 2000; 
-    
-    // Subtle breathing/vibration (The Unease)
-    const vibration = Math.sin(timeSinceBirth * 30) * (breathScale - 1.0) * 10;
-    
-    ctx.beginPath();
-    ctx.moveTo(cx + vibration, cy - lineLength / 2);
-    ctx.lineTo(cx - vibration, cy + lineLength / 2);
-    ctx.stroke();
-
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
+    // ── The Sentient Fiber ─────────────────────────────
+    if (fiberSystem) {
+      fiberSystem.render(ctx, masterOpacity, cx, cy);
+    }
   }
 
 

@@ -29,6 +29,7 @@ import { EventBus } from '../utils/EventBus.js';
 import { EVENTS, BEHAVIOR_STATES, TIMING } from '../constants.js';
 import { Geometry } from './Geometry.js';
 import { EntityAnimator } from './EntityAnimator.js';
+import { FiberSystem } from './FiberSystem.js';
 import { lerp, smootherstep } from '../utils/MathUtils.js';
 
 export class Entity {
@@ -61,13 +62,14 @@ export class Entity {
     /** @type {number|null} Timestamp when entity was born */
     this._birthTime = null;
 
-    // Cinematic reveal offsets
-    this._cinematicOffsetX = -0.6; // Start significantly off-screen
-    this._cinematicOffsetY = -0.3;
+    // Cinematic reveal offsets (Removed for Sentient Fiber)
+    this._cinematicOffsetX = 0;
+    this._cinematicOffsetY = 0;
 
     // ─── Systems ──────────────────────────────────────────────────────────
     this._geometry = new Geometry(coords);
-    this._animator = new EntityAnimator(this._state);
+    this._fiberSystem = new FiberSystem(coords);
+    this._animator = new EntityAnimator(this._state, this._fiberSystem);
 
     // ─── Cursor tracking (for Curious state lean) ─────────────────────────
     /** @type {{ wx: number, wy: number }} Cursor in world space */
@@ -112,7 +114,6 @@ export class Entity {
     this._birthTime = performance.now();
     
     // 0.2s: Instantly appear (masterOpacity = 1)
-    // Geometry logic will handle drawing the core dot first, then the rest.
     this._scheduler.schedule({
       name:     'entity-birth',
       duration: 100,
@@ -121,18 +122,6 @@ export class Entity {
       onUpdate: (t) => {
         this._state.masterOpacity = t;
       },
-    });
-
-    // 1.0s to 3.0s: The shadow passes and the membrane pulls into the center
-    this._scheduler.schedule({
-      name:     'entity-cinematic-pull',
-      duration: 2000,
-      delay:    1000, // Starts moving at 1.0s
-      easing:   smootherstep,
-      onUpdate: (t) => {
-        this._cinematicOffsetX = -0.6 * (1 - t);
-        this._cinematicOffsetY = -0.3 * (1 - t);
-      }
     });
   }
 
@@ -157,6 +146,14 @@ export class Entity {
     const worldY = this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
     const screen = this._coords.worldToScreen(worldX, worldY);
 
+    // Also get the target control point for fibers in screen space
+    const targetWorldCpX = this._cursorWorld.wx + this._state.driftX;
+    const targetWorldCpY = this._cursorWorld.wy + this._state.driftY;
+    const targetScreenCp = this._coords.worldToScreen(targetWorldCpX, targetWorldCpY);
+
+    // Update fiber physics
+    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y);
+
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.
     const baseCx = this._coords.center.x;
@@ -180,7 +177,8 @@ export class Entity {
       this._state.breathScale,
       this._state.behaviorState,
       this._worldStage,
-      timeSinceBirth
+      timeSinceBirth,
+      this._fiberSystem
     );
 
     if (offsetX !== 0 || offsetY !== 0) {
