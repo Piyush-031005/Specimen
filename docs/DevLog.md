@@ -484,3 +484,22 @@ Both fixed in the zero-allocation audit commit before M4.
 ### Architecture decisions
 - **Organic Easing**: Refused to snap the cursor or use rigid keyframes. The fading and the light trail use a custom `_animateProperty` loop with sine easing to feel like a natural fluid motion.
 - **Zero Celebration**: Adhered strictly to the rule: "Connection = Peace". There are no particle explosions or fireworks. The climax of the website is literally *doing less*.
+
+ 
+ # #   P h a s e   4 :   S e n t i e n t   F i b e r   R e f a c t o r   ( C h o r e o g r a p h y   o v e r   G e o m e t r y ) 
+ 
+ A s   t h e   p r o j e c t   s h i f t e d   f o c u s   f r o m   a   p r o c e d u r a l   p h y s i c s   d e m o   t o   a n   u n f o r g e t t a b l e   c i n e m a t i c   e n c o u n t e r ,   t h e   r e n d e r i n g   a r c h i t e c t u r e   n a t u r a l l y   e v o l v e d   b e y o n d   t h e   o r i g i n a l   ` G e o m e t r y . j s `   p a r a d i g m . 
+ 
+ # # #   W h y   ` F i b e r S y s t e m `   E x i s t s 
+ T h e   o r i g i n a l   ` G e o m e t r y . j s `   r e l i e d   o n   d r a w i n g   s t r i c t   g e o m e t r i c   s h a p e s   ( c i r c l e s ,   t r i a n g l e s )   o n   a   g r i d .   T o   e v o k e   a   t r u l y   l i v i n g ,   n e r v o u s - s y s t e m - l i k e   e n t i t y ,   w e   n e e d e d   o r g a n i c   s t r a n d s   t h a t   c o u l d   s n a p ,   r e a c h ,   a n d   t w i s t   i n d e p e n d e n t l y .   ` F i b e r S y s t e m `   w a s   b u i l t   t o   h a n d l e   h i g h l y   o p t i m i z e d ,   p h y s i c s - d r i v e n   q u a d r a t i c   b e z i e r   c u r v e s   w i t h   i n d e p e n d e n t   a n c h o r   p o i n t s .   T h i s   a l l o w e d   u s   t o   i n t r o d u c e   d i s t i n c t   v i s u a l   h i e r a r c h y   ( A r t e r i a l   v s   C a p i l l a r y   f i b e r s )   a n d   h o o k   t h e i r   t e n s i o n   d i r e c t l y   i n t o   t h e   ` B e h a v i o r E n g i n e ` ,   g i v i n g   t h e   e n t i t y   a   p h y s i c a l   r e a c t i o n   t o   t r u s t . 
+ 
+ # # #   W h y   ` S i g n a t u r e M o m e n t `   E x i s t s 
+ A   c o n t i n u o u s   p h y s i c s   s i m u l a t i o n ,   n o   m a t t e r   h o w   b e a u t i f u l ,   l a c k s   e m o t i o n a l   p a c i n g .   ` S i g n a t u r e M o m e n t `   w a s   i n t r o d u c e d   a s   a   s c r i p t e d   s e q u e n c e   c o n d u c t o r   t o   o v e r r i d e   t h e   p h y s i c s   e n g i n e   f o r   t h e   e x p e r i e n c e ` s   c l i m a x .   B y   s e i z i n g   c o n t r o l   o f   t h e   c a n v a s   ( r e n d e r i n g   a   p u r e   b l a c k o u t   o v e r l a y   a n d   a   s i n g l e   g l o w i n g   f i b e r ) ,   i t   p r o v i d e s   t h e   n e c e s s a r y   a n t i c i p a t i o n   a n d   " H a u n t i n g   R e s e t "   b e f o r e   s n a p p i n g   b a c k   t o   t h e   n o r m a l   s i m u l a t i o n   l o o p .   I t   e x i s t s   t o   g u a r a n t e e   c i n e m a t i c   t i m i n g   ( a n t i c i p a t i o n ,   h e s i t a t i o n ,   r e l e a s e )   t h a t   a   p u r e l y   s y s t e m i c   s i m u l a t i o n   c a n n o t   g u a r a n t e e . 
+ 
+ # # #   T h e   R e n d e r i n g   E v o l u t i o n 
+ 1 .   * * G r i d * *   - >   ` C o o r d i n a t e S y s t e m `   m a p s   w o r l d   t o   s c r e e n . 
+ 2 .   * * S a c r e d   G e o m e t r y * *   - >   ` G e o m e t r y . j s `   d r e w   s t r i c t   l i n e s ,   r o t a t e d   b a s e d   o n   t r u s t . 
+ 3 .   * * S e n t i e n t   E n t i t y * *   - >   ` F i b e r S y s t e m . j s `   d r a w s   i n d e p e n d e n t   s t r a n d s ,   t e n s i o n   m a p s   t o   t r u s t . 
+ 4 .   * * C i n e m a t i c   M o m e n t s * *   - >   ` S i g n a t u r e M o m e n t . j s `   o v e r r i d e s   t h e   c a n v a s   e n t i r e l y   f o r   e m o t i o n a l   b e a t s . 
+  
+ 
