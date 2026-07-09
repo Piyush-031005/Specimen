@@ -274,6 +274,47 @@ export class EntityAnimator {
       if (this._stillnessTimer > 1.0 || this._timeSinceLoad > 3.0) {
         EventBus.emit(EVENTS.INTRO_REVEALED, {});
       }
+    } else {
+      // ── Mutual Hesitation (The Standoff) ──────────────────────────────────
+      this._stillnessTimer += deltaSeconds;
+      
+      // Evaluate silence meaning when stillness crosses the 0.5s threshold
+      if (this._stillnessTimer > 0.5 && this._stillnessTimer - deltaSeconds <= 0.5) {
+         let avgV = 0;
+         if (this._recentVelocities.length > 0) {
+            let sum = 0;
+            for (let v of this._recentVelocities) sum += v;
+            avgV = sum / this._recentVelocities.length;
+         }
+         
+         if (avgV > 2.0) {
+            this._state.standoffContext = 'suspicion';
+         } else if (avgV > 0.2) {
+            this._state.standoffContext = 'curiosity';
+         } else {
+            this._state.standoffContext = 'passive';
+         }
+      }
+      
+      // Apply tension as stillness grows
+      if (this._stillnessTimer > 1.0) {
+         // Tension ramps from 0 to 1 over 4 seconds of waiting
+         this._state.standoffIntensity = clamp((this._stillnessTimer - 1.0) / 4.0, 0, 1.0);
+         
+         if (this._state.standoffContext === 'suspicion') {
+            // Organism freezes defensively
+            this._isHesitating = true;
+            this._hesitationDuration = 0.5; // Renew hesitation
+            this._hesitationTimer = 0.5;
+            this._targetParams.driftScale = 0.001; // Almost zero drift
+         } else if (this._state.standoffContext === 'curiosity') {
+            // Organism freezes attentively
+            this._targetParams.driftScale = STATE_ANIM_PARAMS[this._behaviorState].driftScale * (1.0 - this._state.standoffIntensity * 0.8);
+         }
+      } else {
+         this._state.standoffIntensity = 0;
+         this._state.standoffContext = null;
+      }
     }
 
     // ── Smoothly interpolate animation params toward target ────────────────

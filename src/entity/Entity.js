@@ -56,6 +56,8 @@ export class Entity {
       behaviorState:  BEHAVIOR_STATES.CALM,
       isUnraveled:    false,
       pluckPhase:     'idle', // idle -> tension -> freeze -> exploded
+      standoffIntensity: 0,
+      standoffContext: null
     };
 
     /** @type {number} Current world stage (0-5) */
@@ -222,7 +224,9 @@ export class Entity {
       timeSinceBirth,
       this._fiberSystem,
       this._animator._introState,
-      this._animator._temperament
+      this._animator._temperament,
+      this._state.standoffIntensity,
+      this._state.standoffContext
     );
 
     if (offsetX !== 0 || offsetY !== 0) {

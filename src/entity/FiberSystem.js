@@ -279,7 +279,7 @@ export class FiberSystem {
   /**
    * Render the fibers
    */
-  render(ctx, masterOpacity, cx, cy, introState, temperament = 0.0) {
+  render(ctx, masterOpacity, cx, cy, introState, temperament = 0.0, standoffIntensity = 0, standoffContext = null) {
     if (masterOpacity <= 0.001) return;
 
     if (introState === 'hiding') {
@@ -336,9 +336,23 @@ export class FiberSystem {
       const opacity = f.baseOpacity * masterOpacity * (0.1 + this._unravelProgress * 0.9);
       
       // Temperament affects line width. Guarded (-1) = Thicker, defensive. Playful (+1) = Thinner, delicate.
-      const lineWidthMod = temperament < 0 
+      let lineWidthMod = temperament < 0 
         ? 1.0 + (Math.abs(temperament) * 0.5) 
         : 1.0 - (temperament * 0.2);
+
+      // Mutual Hesitation Standoff Effects
+      let jitterX = 0;
+      let jitterY = 0;
+      if (standoffIntensity > 0) {
+         if (standoffContext === 'suspicion') {
+            // Trembling standoff
+            jitterX = (Math.random() - 0.5) * standoffIntensity * 4.0;
+            lineWidthMod *= (1.0 + standoffIntensity * 0.3); // Thicker with tension
+         } else if (standoffContext === 'curiosity') {
+            // Reaching out slowly
+            lineWidthMod *= (1.0 - standoffIntensity * 0.2); // Thinner, more delicate
+         }
+      }
 
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
@@ -346,7 +360,7 @@ export class FiberSystem {
       
       ctx.beginPath();
       ctx.moveTo(f.currStartX, f.currStartY);
-      ctx.quadraticCurveTo(f.currCpX, f.currCpY, f.currEndX, f.currEndY);
+      ctx.quadraticCurveTo(f.currCpX + jitterX, f.currCpY + jitterY, f.currEndX, f.currEndY);
       ctx.stroke();
     }
     
