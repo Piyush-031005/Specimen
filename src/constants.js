@@ -52,6 +52,7 @@ export const EVENTS = Object.freeze({
   // Entity
   ENTITY_PULSE_EMITTED: 'entity:pulse_emitted',
   ENTITY_STATE_CHANGED: 'entity:state_changed',
+  FIBER_PLUCK: 'entity:fiber_pluck',
 
   // Behavior
   BEHAVIOR_STATE_CHANGED: 'behavior:state_changed',

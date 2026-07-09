@@ -98,8 +98,6 @@ export class Geometry {
     // 1.0s - 2.0s: Geometry draws in
     const drawProgress = Math.max(0, Math.min(1, timeSinceBirth - 1.0));
 
-    const drawProgress = Math.max(0, Math.min(1, timeSinceBirth - 1.0));
-
     // ── The Sentient Fiber Foundation ─────────────────────────────
     // Stage 0: A single 1-pixel vertical line spanning the screen.
     // It looks like a UI mistake, until it breathes.

@@ -52,6 +52,7 @@ export class Entity {
       driftY:         0,
       masterOpacity:  0,   // Starts at 0
       behaviorState:  BEHAVIOR_STATES.CALM,
+      isUnraveled:    false,
     };
 
     /** @type {number} Current world stage (0-5) */
@@ -92,6 +93,10 @@ export class Entity {
       const { wx, wy } = coords.screenToWorld(x, y);
       this._cursorWorld.wx = wx;
       this._cursorWorld.wy = wy;
+    });
+
+    EventBus.on(EVENTS.FIBER_PLUCK, ({ velocityX, yPos }) => {
+      this._state.isUnraveled = true;
     });
 
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {

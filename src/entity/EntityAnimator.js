@@ -153,6 +153,15 @@ export class EntityAnimator {
         const distSq = dx * dx + dy * dy;
         const dt = now - this._lastCursor.time;
         
+        // Detect Pluck: Cursor crossing the vertical center line
+        const cx = window.innerWidth / 2;
+        if ((this._lastCursor.x <= cx && x > cx) || (this._lastCursor.x >= cx && x < cx)) {
+          // If the movement was deliberate enough (not just a jitter)
+          if (Math.abs(dx) > 5) {
+            EventBus.emit(EVENTS.FIBER_PLUCK, { velocityX: dx / Math.max(1, dt), yPos: y });
+          }
+        }
+
         // If cursor moves very fast (e.g. > 1000 pixels per second squared roughly)
         if (dt > 0 && (distSq / dt) > 1500) {
           // Entity gets startled / hesitates intentionally
