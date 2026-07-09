@@ -54,6 +54,7 @@ export class Entity {
       masterOpacity:  0,   // Starts at 0
       behaviorState:  BEHAVIOR_STATES.CALM,
       isUnraveled:    false,
+      pluckPhase:     'idle', // idle -> tension -> freeze -> exploded
     };
 
     /** @type {number} Current world stage (0-5) */
@@ -111,11 +112,30 @@ export class Entity {
     });
 
     EventBus.on(EVENTS.FIBER_PLUCK, ({ velocityX, yPos }) => {
-      this._state.isUnraveled = true;
+      // Only trigger if we are idle
+      if (this._state.pluckPhase === 'idle') {
+        this._state.pluckPhase = 'tension';
+        EventBus.emit(EVENTS.BEHAVIOR_STATE_CHANGED, { state: BEHAVIOR_STATES.HESITANT }); // Build tension
+
+        // 400ms tension vibration
+        setTimeout(() => {
+          if (this._state.pluckPhase !== 'tension') return;
+          this._state.pluckPhase = 'freeze';
+          
+          // 150ms dead freeze
+          setTimeout(() => {
+            if (this._state.pluckPhase !== 'freeze') return;
+            this._state.pluckPhase = 'exploded';
+            this._state.isUnraveled = true;
+            EventBus.emit(EVENTS.BEHAVIOR_STATE_CHANGED, { state: BEHAVIOR_STATES.DEFENSIVE }); // The release
+          }, 150);
+        }, 400);
+      }
     });
 
     EventBus.on('FORCE_RESET_FIBERS', () => {
       this._state.isUnraveled = false;
+      this._state.pluckPhase = 'idle';
       this._fiberSystem.resetUnravel();
     });
 
@@ -173,7 +193,7 @@ export class Entity {
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
     // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor);
+    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor, this._state.pluckPhase);
 
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.
