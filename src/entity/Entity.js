@@ -62,6 +62,9 @@ export class Entity {
     /** @type {number|null} Timestamp when entity was born */
     this._birthTime = null;
 
+    /** @type {boolean} True if returning visitor */
+    this._isReturningVisitor = false;
+
     // Cinematic reveal offsets (Removed for Sentient Fiber)
     this._cinematicOffsetX = 0;
     this._cinematicOffsetY = 0;
@@ -87,6 +90,13 @@ export class Entity {
     
     EventBus.on(EVENTS.WORLD_STAGE_CHANGED, ({ stageDef }) => {
       this._worldStage = stageDef.stage;
+    });
+
+    EventBus.on(EVENTS.MEMORY_LOADED, ({ data }) => {
+      if (data.sessionCount > 1) {
+        this._isReturningVisitor = true;
+        this._state.isUnraveled = true; // Start unraveled
+      }
     });
 
     EventBus.on(EVENTS.RESIZE, () => {
@@ -158,7 +168,7 @@ export class Entity {
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
     // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill);
+    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor);
 
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.

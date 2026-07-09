@@ -79,7 +79,7 @@ export class FiberSystem {
   /**
    * Update fiber physics
    */
-  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill) {
+  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor) {
     // Spring toward unraveled state
     const targetProgress = isUnraveled ? 1.0 : 0.0;
     // Violent snap out, slow retraction in
@@ -134,6 +134,14 @@ export class FiberSystem {
         unraveledCpX = finalTargetCpX + Math.cos(angle) * radius;
         unraveledCpY = finalTargetCpY + Math.sin(angle) * radius;
         breathMod *= 0.5; // Calm the breathing down while swirling
+      }
+      
+      // If returning visitor, topology is permanently slightly twisted
+      if (isReturningVisitor) {
+        breathMod *= 1.4; // More erratic breathing
+        const twistAngle = (i / this._numFibers) * Math.PI;
+        unraveledCpX += Math.cos(twistAngle) * 30;
+        unraveledCpY += Math.sin(twistAngle) * 30;
       }
       
       // Add breathing noise
