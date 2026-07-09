@@ -41,3 +41,35 @@ The code must disappear. The math must disappear. The behavior engine must disap
 The visitor should never think about the simulation. They should only experience the encounter.
 
 *We optimize for making the visitor wait willingly.*
+
+## The Ultimate Benchmark
+From this point forward, we do not ask: "Is this cooler than Bruno Simon?" or "Is this prettier than RESN?"
+We ask exactly one question:
+**"Will two people have entirely different conversations after experiencing it?"**
+
+If the answer is YES, we are designing an experience. If the answer is NO, we are just making an animation.
+
+**The Golden Rule of Visual Identity:**
+*"The organism is not the subject. The space around it is."*
+
+**Rule 6: The 10-Second Test**
+If a prototype can be fully understood in the first 10 seconds, delete it. The sequence must be: Curiosity → Observation → Realization → Recognition.
+
+**Rule 7: The Unforgettable Moment**
+Every prototype must create exactly ONE unforgettable moment. Not five. Not ten. One. It should make the visitor's hand stop moving on the mouse.
+
+**Rule 8: Behavior over Aesthetics**
+Nothing in SPECIMEN should exist because it looks cool. Everything must exist because it changes human behavior.
+
+**Rule 9: The Guest Experience**
+The visitor must never feel like the protagonist. They must feel like a witness entering a reality that was already alive before they arrived. The universe does not begin when the cursor moves.
+
+---
+
+## Future Possibilities (The Backlog)
+
+**Environmental Seasons**
+The same organism, memory, and identity, but the world feels different on different days. Sometimes the air feels heavy. Sometimes particles are almost absent. Sometimes the organism is unusually quiet. Just like a real forest, the environment never feels exactly the same twice, even if the trees haven't moved.
+
+**Silent Visitors (Respect Mode)**
+If a visitor does absolutely nothing for 3–4 minutes—no clicks, no drags, no teasing, just pure observation—the organism shifts from an interactive mode to an observation mode. It stops trying to entertain them. It acknowledges them as a fellow observer and simply exists alongside them. This is not a reward; it is a sign of respect.
