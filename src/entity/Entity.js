@@ -26,7 +26,7 @@
  */
 
 import { EventBus } from '../utils/EventBus.js';
-import { EVENTS, BEHAVIOR_STATES, TIMING } from '../constants.js';
+import { EVENTS, BEHAVIOR_STATES, TIMING, REALITY_LAWS } from '../constants.js';
 import { Geometry } from './Geometry.js';
 import { EntityAnimator } from './EntityAnimator.js';
 import { FiberSystem } from './FiberSystem.js';
@@ -213,21 +213,23 @@ export class Entity {
     const timeSinceBirth = this._birthTime ? (performance.now() - this._birthTime) / 1000 : 0;
 
     // Draw geometry
-    this._geometry.render(
-      ctx,
-      this._state.outerRotation,
-      this._state.innerRotation,
-      this._state.masterOpacity,
-      this._state.breathScale,
-      this._state.behaviorState,
-      this._worldStage,
-      timeSinceBirth,
-      this._fiberSystem,
-      this._animator._introState,
-      this._animator._temperament,
-      this._state.standoffIntensity,
-      this._state.standoffContext
-    );
+    if (REALITY_LAWS.IS_ORGANISM_VISIBLE) {
+      this._geometry.render(
+        ctx,
+        this._state.outerRotation,
+        this._state.innerRotation,
+        this._state.masterOpacity,
+        this._state.breathScale,
+        this._state.behaviorState,
+        this._worldStage,
+        timeSinceBirth,
+        this._fiberSystem,
+        this._animator._introState,
+        this._animator._temperament,
+        this._state.standoffIntensity,
+        this._state.standoffContext
+      );
+    }
 
     if (offsetX !== 0 || offsetY !== 0) {
       ctx.restore();

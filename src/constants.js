@@ -128,3 +128,14 @@ export const TRUST = Object.freeze({
   MISS_PENALTY: 1.5,
   IDLE_DECAY_RATE: 0.05,    // Per second when user is doing nothing
 });
+
+// ─── Reality Laws (Feature Toggles) ───────────────────────────────────────────
+// Built for blind comparison testing. Each law must survive on its own merit.
+export const REALITY_LAWS = {
+  HEAVY_SPACE: true,      // Anisotropic compression based on threat
+  LIVING_DARKNESS: true,  // Volumetric darkness reacting with inertia to certainty
+  MEMORY_DISTORTION: false,
+  UNCERTAINTY: false,
+  WITNESS: false,
+  IS_ORGANISM_VISIBLE: true // Added for World Only recording
+};
