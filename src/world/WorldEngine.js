@@ -106,6 +106,12 @@ export class WorldEngine {
    * @private
    */
   _tickPhysics(deltaSeconds) {
+    if (!REALITY_LAWS.ENABLE_MOUSE_TENSION) {
+      this._tension = 0;
+      this._certainty = 1.0;
+      return;
+    }
+
     this._cursorStillness += deltaSeconds;
 
     let avgV = 0;

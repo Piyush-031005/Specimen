@@ -137,5 +137,10 @@ export const REALITY_LAWS = {
   MEMORY_DISTORTION: false,
   UNCERTAINTY: false,
   WITNESS: false,
-  IS_ORGANISM_VISIBLE: true // Added for World Only recording
+  IS_ORGANISM_VISIBLE: true, // Added for World Only recording
+  
+  // CORE RESTORATION FLAGS (Pass 1)
+  ENABLE_MOUSE_TENSION: false,
+  ENABLE_FIBER_PLUCK: false,
+  ENABLE_CURIOUS_LEAN: false,
 };

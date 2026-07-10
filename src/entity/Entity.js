@@ -118,6 +118,7 @@ export class Entity {
     });
 
     EventBus.on(EVENTS.FIBER_PLUCK, ({ velocityX, yPos }) => {
+      if (!REALITY_LAWS.ENABLE_FIBER_PLUCK) return;
       // Only trigger if we are idle
       if (this._state.pluckPhase === 'idle') {
         this._state.pluckPhase = 'tension';
@@ -244,6 +245,12 @@ export class Entity {
    * @private
    */
   _updateCursorLean(deltaSeconds) {
+    if (!REALITY_LAWS.ENABLE_CURIOUS_LEAN) {
+      this._cursorLean.wx = 0;
+      this._cursorLean.wy = 0;
+      return;
+    }
+
     const isCurious = this._state.behaviorState === BEHAVIOR_STATES.CURIOUS;
     
     // Calculate cursor speed/volatility
