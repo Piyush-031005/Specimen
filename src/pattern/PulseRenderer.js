@@ -183,19 +183,22 @@ export class PulseRenderer {
 
       if (opacity < 0.005 || currentRadius < 1) continue;
 
-      ctx.globalAlpha = opacity;
-      ctx.strokeStyle = ring.isResponse ? COLORS.ELECTRIC_BLUE : COLORS.WARM_WHITE;
-      ctx.lineWidth   = 1.0;
+      const thickness = currentRadius * 0.2; // 20% of current radius is the wave thickness
+      const innerRadius = Math.max(0, currentRadius - thickness);
       
-      // Add subtle glow
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = ctx.strokeStyle;
+      // Volumetric wave using radial gradient (pressure wave)
+      const gradient = ctx.createRadialGradient(ring.cx, ring.cy, innerRadius, ring.cx, ring.cy, currentRadius);
+      const color = ring.isResponse ? '64, 156, 255' : '245, 240, 232'; // Match current constants roughly
+      
+      gradient.addColorStop(0, `rgba(${color}, 0)`);
+      gradient.addColorStop(0.7, `rgba(${color}, ${opacity * 0.4})`); // Very subtle core
+      gradient.addColorStop(1, `rgba(${color}, 0)`);
 
+      ctx.fillStyle = gradient;
+      
       ctx.beginPath();
       ctx.arc(ring.cx, ring.cy, currentRadius, 0, TWO_PI);
-      ctx.stroke();
-      
-      ctx.shadowBlur = 0; // Reset
+      ctx.fill();
     }
 
     ctx.restore();
