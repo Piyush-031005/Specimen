@@ -133,7 +133,8 @@ export const TRUST = Object.freeze({
 // Built for blind comparison testing. Each law must survive on its own merit.
 export const REALITY_LAWS = {
   HEAVY_SPACE: true,      // Anisotropic compression based on threat
-  LIVING_DARKNESS: true,  // Volumetric darkness reacting with inertia to certainty
+  // 'A' = None, 'B' = Static Floor, 'C' = 10% Living (No Physics)
+  DARKNESS_MODE: 'A',     
   MEMORY_DISTORTION: false,
   UNCERTAINTY: false,
   WITNESS: false,

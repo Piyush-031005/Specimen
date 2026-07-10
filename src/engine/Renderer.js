@@ -210,60 +210,57 @@ export class Renderer {
     }
     this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
 
-    // Gravitational distortion (faint glow following cursor/entity)
-    // Always active, subtly influencing the void
-    const radius = Math.max(cx, cy) * 1.5;
-    
-    // Smoothly track mouse position for the distortion center
-    if (!this._distX) this._distX = cx;
-    if (!this._distY) this._distY = cy;
-    this._distX += (this._mouseX - this._distX) * 2.0 * this._tickData.deltaSeconds;
-    this._distY += (this._mouseY - this._distY) * 2.0 * this._tickData.deltaSeconds;
-    
-    const gradient = this._ctx.createRadialGradient(this._distX, this._distY, 0, cx, cy, radius);
-    
-    // Interpolate center color based on luminosity, but base is a very faint deep space blue/violet
-    const l = this._bgLuminosity;
-    const r = Math.floor(6 + l * 20);
-    const g = Math.floor(8 + l * 20);
-    const b = Math.floor(14 + l * 20);
-    
-    gradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
-    gradient.addColorStop(0.5, 'rgba(3, 4, 6, 0.8)');
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    
-    this._ctx.globalCompositeOperation = 'screen';
-    this._ctx.fillStyle = gradient;
-    this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
-    this._ctx.globalCompositeOperation = 'source-over';
-
-    if (REALITY_LAWS.LIVING_DARKNESS) {
-      // The Physics: Darkness has immense inertia, guided by certainty.
-      // Editor's Cut: Negative space is potential. The edge vibrates subtly when tension is high (certainty is low).
-      const maxRadius = Math.max(cx, cy) * 1.5;
-      const targetRadius = 100 + (maxRadius * this._worldCertainty);
+    // ── Darkness Modes (A, B, C) ──────────────────────────────────────────────
+    if (REALITY_LAWS.DARKNESS_MODE === 'B' || REALITY_LAWS.DARKNESS_MODE === 'C') {
+      const radius = Math.max(cx, cy) * 1.5;
       
-      const decaySpeed = 0.3; // extremely slow liquid inertia
-      this._darknessRadius = this._darknessRadius + (targetRadius - this._darknessRadius) * (1.0 - Math.exp(-decaySpeed * this._tickData.deltaSeconds));
-
-      // Editor's Cut: True tension is arrhythmic. Compound waves replace the perfect metronomic sine.
-      const t1 = Math.sin(this._tickData.now * 0.002);
-      const t2 = Math.cos(this._tickData.now * 0.0053);
-      const t3 = Math.sin(this._tickData.now * 0.0089);
-      const arrhythmicThrob = t1 * t2 * t3; // Unpredictable pulsing
+      // Static floor (No mouse tracking in Pass 1)
+      this._distX = cx;
+      this._distY = cy;
       
-      const tensionVibration = (1.0 - this._worldCertainty) * arrhythmicThrob * 40.0;
-      const innerRad = Math.max(0, this._darknessRadius * 0.2 + tensionVibration);
-      const outerRad = Math.max(1, this._darknessRadius + tensionVibration * 0.5);
-
-      const darkGradient = this._ctx.createRadialGradient(this._distX, this._distY, innerRad, this._distX, this._distY, outerRad);
-      darkGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      darkGradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.5)'); // Sharper falloff (feels heavier)
-      darkGradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.95)');
-      darkGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
-
-      this._ctx.fillStyle = darkGradient;
+      const gradient = this._ctx.createRadialGradient(this._distX, this._distY, 0, cx, cy, radius);
+      
+      const l = this._bgLuminosity;
+      const r = Math.floor(6 + l * 20);
+      const g = Math.floor(8 + l * 20);
+      const b = Math.floor(14 + l * 20);
+      
+      gradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
+      gradient.addColorStop(0.5, 'rgba(3, 4, 6, 0.8)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      
+      this._ctx.globalCompositeOperation = 'screen';
+      this._ctx.fillStyle = gradient;
       this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
+      this._ctx.globalCompositeOperation = 'source-over';
+
+      if (REALITY_LAWS.DARKNESS_MODE === 'C') {
+        const maxRadius = Math.max(cx, cy) * 1.5;
+        // No certainty math in Pass 1. Constant static radius.
+        const targetRadius = 100 + maxRadius; 
+        
+        const decaySpeed = 0.3;
+        this._darknessRadius = this._darknessRadius + (targetRadius - this._darknessRadius) * (1.0 - Math.exp(-decaySpeed * this._tickData.deltaSeconds));
+
+        const t1 = Math.sin(this._tickData.now * 0.002);
+        const t2 = Math.cos(this._tickData.now * 0.0053);
+        const t3 = Math.sin(this._tickData.now * 0.0089);
+        const arrhythmicThrob = t1 * t2 * t3;
+        
+        // 10% Intensity, no tension math
+        const tensionVibration = arrhythmicThrob * 4.0; // was 40.0
+        const innerRad = Math.max(0, this._darknessRadius * 0.2 + tensionVibration);
+        const outerRad = Math.max(1, this._darknessRadius + tensionVibration * 0.5);
+
+        const darkGradient = this._ctx.createRadialGradient(this._distX, this._distY, innerRad, this._distX, this._distY, outerRad);
+        darkGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        darkGradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.5)');
+        darkGradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.95)');
+        darkGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+        this._ctx.fillStyle = darkGradient;
+        this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
+      }
     }
 
     // ── Emit tick — all subscribers draw here ─────────────────────────────
