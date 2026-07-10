@@ -35,7 +35,7 @@ import { ParticleManager } from './world/ParticleManager.js';
 
 import { AudioEngine } from './audio/AudioEngine.js';
 import { MemorySystem } from './memory/MemorySystem.js';
-import { HintLayer } from './ui/HintLayer.js';
+
 import { CustomCursor } from './ui/CustomCursor.js';
 import { SignatureMoment } from './ui/SignatureMoment.js';
 
@@ -44,7 +44,6 @@ import { EVENTS } from './constants.js';
 
 // ─── DOM ──────────────────────────────────────────────────────────────────────
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('canvas'));
-const hintEl = /** @type {HTMLElement} */ (document.getElementById('hint-layer'));
 
 // ─── Instantiate Systems ──────────────────────────────────────────────────────
 const memory        = new MemorySystem();
@@ -60,7 +59,6 @@ const rhythmMatcher = new RhythmMatcher(tolerance); // eslint-disable-line no-un
 const behavior      = new BehaviorEngine(memory);
 const audio         = new AudioEngine(memory);
 const entity        = new Entity(coords, scheduler, memory);
-const hint          = new HintLayer(hintEl);
 const customCursor  = new CustomCursor(coords);
 const signatureMoment = new SignatureMoment(customCursor, coords, memory);
 
@@ -155,8 +153,7 @@ setTimeout(() => {
   EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
 }, 3000);
 
-// 8. Hint layer timer begins (shows '...' after 12s idle)
-hint.start();
+// 8. Removed HintLayer
 
 // 9. Wire response time recording to MemorySystem
 // MemorySystem records visitor's rhythm fingerprint for return visits

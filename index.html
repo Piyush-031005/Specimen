@@ -48,30 +48,11 @@
         display: block;
       }
 
-      /* Hint layer — invisible by default */
-      #hint-layer {
-        position: fixed;
-        bottom: 48px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 11px;
-        font-weight: 300;
-        letter-spacing: 0.2em;
-        color: rgba(245, 240, 232, 0);
-        pointer-events: none;
-        transition: color 2s ease;
-        white-space: nowrap;
-      }
 
-      #hint-layer.visible {
-        color: rgba(245, 240, 232, 0.3);
-      }
     </style>
   </head>
   <body>
     <canvas id="canvas"></canvas>
-    <div id="hint-layer" aria-hidden="true">...</div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
