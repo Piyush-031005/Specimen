@@ -79,13 +79,10 @@ export class PulseRenderer {
     });
 
     EventBus.on(EVENTS.COMMUNICATION_MATCH, () => {
-      // Editor's Cut: Expectation violation. 
-      // 10% chance to delay the echo to simulate hesitation/defiance.
-      if (Math.random() < 0.10) {
-        setTimeout(() => this._spawn(true), 500 + Math.random() * 500);
-      } else {
-        this._spawn(true);   // Response echo — electric blue, smaller, faster
-      }
+      // Organism never responds immediately like a button click.
+      // It processes, hesitates, and then answers.
+      const delay = 300 + Math.random() * 600;
+      setTimeout(() => this._spawn(true), delay);
     });
 
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
@@ -186,9 +183,9 @@ export class PulseRenderer {
       const thickness = currentRadius * 0.2; // 20% of current radius is the wave thickness
       const innerRadius = Math.max(0, currentRadius - thickness);
       
-      // Volumetric wave using radial gradient (pressure wave)
+      // Color is always warm white. No UI "success" colors.
+      const color = '245, 240, 232'; 
       const gradient = ctx.createRadialGradient(ring.cx, ring.cy, innerRadius, ring.cx, ring.cy, currentRadius);
-      const color = ring.isResponse ? '64, 156, 255' : '245, 240, 232'; // Match current constants roughly
       
       gradient.addColorStop(0, `rgba(${color}, 0)`);
       gradient.addColorStop(0.7, `rgba(${color}, ${opacity * 0.4})`); // Very subtle core
