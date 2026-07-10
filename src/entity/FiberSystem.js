@@ -58,10 +58,10 @@ export class FiberSystem {
         endY = randomFloat(baseStartY, baseEndY);
       }
       
-      // Visual Hierarchy: 15% are Arterial (thick, strong), 85% are Capillary (thin, faint)
-      const isArterial = Math.random() < 0.15;
-      const lineWidth = isArterial ? randomFloat(1.2, 1.8) : randomFloat(0.2, 0.5);
-      const baseOpacity = isArterial ? randomFloat(0.5, 0.8) : randomFloat(0.1, 0.2);
+      // Visual Hierarchy: No permanent hero. 2% are 'Emergent Heroes' that only appear during tension.
+      const isEmergentHero = Math.random() < 0.02;
+      const lineWidth = randomFloat(0.2, 0.4); // Barely perceptible normally
+      const baseOpacity = randomFloat(0.01, 0.03); // Barely perceptible normally
 
       this._fibers.push({
         tStartX: startX,
@@ -69,7 +69,7 @@ export class FiberSystem {
         tEndX: endX,
         tEndY: endY,
         
-        isArterial,
+        isEmergentHero,
         lineWidth,
         baseOpacity,
         
@@ -183,7 +183,7 @@ export class FiberSystem {
       let finalTargetCpY = targetCpY;
       let breathMod = 1.0;
       let tensionMod = 1.0;
-      let hierarchyMod = f.isArterial ? 1.2 : 0.8; // Arterial fibers react stronger
+      let hierarchyMod = f.isEmergentHero ? 1.5 : 0.9; 
 
       if (behaviorState === 'defensive') {
         // Pull tightly into a knot, but don't shrink to nothing.
@@ -232,7 +232,7 @@ export class FiberSystem {
         const dist = Math.sqrt(dx * dx + dy * dy);
         
         // If cursor gets too close, the fiber forcefully pushes away (Intrusion reaction)
-        const threshold = f.isArterial ? 250 : 150;
+        const threshold = f.isEmergentHero ? 250 : 150;
         if (dist < threshold && dist > 1) {
           const pushForce = Math.pow(1 - (dist / threshold), 2) * 200; // Exponential push
           unraveledCpX += (dx / dist) * pushForce;
@@ -335,13 +335,20 @@ export class FiberSystem {
 
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
-      // Modulate opacity by unravel progress and fiber's base opacity
-      const opacity = f.baseOpacity * masterOpacity * (0.1 + this._unravelProgress * 0.9);
-      
-      // Temperament affects line width. Guarded (-1) = Thicker, defensive. Playful (+1) = Thinner, delicate.
+      // Modulate opacity by unravel progress, and CRITICALLY by standoff/recoil if it's an emergent hero.
+      let opacity = f.baseOpacity * masterOpacity * (0.1 + this._unravelProgress * 0.9);
       let lineWidthMod = temperament < 0 
         ? 1.0 + (Math.abs(temperament) * 0.5) 
         : 1.0 - (temperament * 0.2);
+        
+      // Emergent Hero Logic: Only lights up when the environment demands it
+      if (f.isEmergentHero) {
+         const tensionSpike = Math.max(standoffIntensity, recoilOvershoot > 0 ? 1.0 : 0);
+         if (tensionSpike > 0) {
+            opacity += tensionSpike * 0.8; // Spikes to 80% opacity
+            lineWidthMod += tensionSpike * 5.0; // Spikes to 2.0+ width
+         }
+      }
 
       // Mutual Hesitation Standoff Effects
       let jitterX = 0;
