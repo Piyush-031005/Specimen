@@ -35,33 +35,75 @@ export class FiberSystem {
     const cx = this._coords.center.x;
     const cy = this._coords.center.y;
     
-    // The resting line occupies exactly 80% of the screen height, feeling present but contained
-    const baseStartY = cy - (h * 0.4);
-    const baseEndY = cy + (h * 0.4);
+    // We reduce the number of fibers to clean up noise and emphasize anatomy
+    this._numFibers = 120; 
 
     for (let i = 0; i < this._numFibers; i++) {
-      let startX, startY, endX, endY;
+      // Visual Hierarchy: 4 distinct anatomical classes
+      // 1. Primary (Emergent Heroes) - Longest, thickest, very few (the main limbs)
+      // 2. Secondary - Medium length, supporting structure
+      // 3. Tertiary - Short, dense, fills out the core
+      // 4. Background tissue - Tiny, faint, immediate brain surroundings
 
-      // The organism is larger than the screen. Anchors originate off-screen.
-      // 80% of fibers anchor far beyond top/bottom poles. 20% anchor far beyond the sides.
-      if (Math.random() < 0.8) {
-        // Vertical-ish fibers
-        startX = randomFloat(cx - w * 0.4, cx + w * 0.4);
-        startY = baseStartY - randomFloat(h * 0.5, h * 1.5);
-        endX = randomFloat(cx - w * 0.4, cx + w * 0.4);
-        endY = baseEndY + randomFloat(h * 0.5, h * 1.5);
+      const hierarchyRoll = Math.random();
+      let hierarchyLevel;
+      let radiusMod;
+      let baseOpacity;
+      let lineWidth;
+      
+      if (hierarchyRoll < 0.08) {
+        hierarchyLevel = 'primary';
+        radiusMod = 1.3;
+        baseOpacity = randomFloat(0.1, 0.2);
+        lineWidth = randomFloat(0.8, 1.2);
+      } else if (hierarchyRoll < 0.3) {
+        hierarchyLevel = 'secondary';
+        radiusMod = 0.8;
+        baseOpacity = randomFloat(0.05, 0.1);
+        lineWidth = randomFloat(0.4, 0.6);
+      } else if (hierarchyRoll < 0.8) {
+        hierarchyLevel = 'tertiary';
+        radiusMod = 0.4;
+        baseOpacity = randomFloat(0.02, 0.05);
+        lineWidth = randomFloat(0.2, 0.3);
       } else {
-        // Horizontal-ish fibers (creates width in the body)
-        startX = cx - randomFloat(w * 0.8, w * 1.5);
-        startY = randomFloat(baseStartY, baseEndY);
-        endX = cx + randomFloat(w * 0.8, w * 1.5);
-        endY = randomFloat(baseStartY, baseEndY);
+        hierarchyLevel = 'tissue';
+        radiusMod = 0.15;
+        baseOpacity = randomFloat(0.01, 0.02);
+        lineWidth = randomFloat(0.1, 0.2);
       }
       
-      // Visual Hierarchy: No permanent hero. 2% are 'Emergent Heroes' that only appear during tension.
-      const isEmergentHero = Math.random() < 0.02;
-      const lineWidth = randomFloat(0.2, 0.4); // Barely perceptible normally
-      const baseOpacity = randomFloat(0.01, 0.03); // Barely perceptible normally
+      const isEmergentHero = hierarchyLevel === 'primary';
+
+      // Organic radial distribution (bias horizontally to feel like an eye/brain rather than a perfect circle)
+      const angle = randomFloat(0, Math.PI * 2);
+      
+      // Asymmetry: Add natural variation to the reach
+      const reachVariance = randomFloat(0.7, 1.3);
+      const spreadX = Math.cos(angle) * (w * 0.35 * radiusMod * reachVariance);
+      const spreadY = Math.sin(angle) * (h * 0.25 * radiusMod * reachVariance);
+      
+      // Every fiber originates exactly at the Brain (with a microscopic offset for organic roots)
+      const startX = cx + Math.cos(angle) * 3;
+      const startY = cy + Math.sin(angle) * 3;
+      
+      // Fibers reach outward to the periphery
+      const endX = cx + spreadX;
+      const endY = cy + spreadY;
+      
+      // The control point gives the curve its biological sweep. 
+      // It bows outwards from the straight line between start and end.
+      const midX = (startX + endX) / 2;
+      const midY = (startY + endY) / 2;
+      const normalX = -Math.sin(angle);
+      const normalY = Math.cos(angle);
+      
+      // Primary branches bow less (more direct), tissue bows wildly (more tangled)
+      const bowMultiplier = hierarchyLevel === 'primary' ? 0.3 : 0.8;
+      const bowMagnitude = randomFloat(-w * 0.1, w * 0.1) * radiusMod * bowMultiplier;
+      
+      const absoluteCpX = midX + normalX * bowMagnitude;
+      const absoluteCpY = midY + normalY * bowMagnitude;
 
       this._fibers.push({
         tStartX: startX,
@@ -70,21 +112,22 @@ export class FiberSystem {
         tEndY: endY,
         
         isEmergentHero,
+        hierarchyLevel,
         lineWidth,
         baseOpacity,
         
-        // Control point offset target (the "knot" in the center)
-        cpOffsetX: randomFloat(-w * 0.4, w * 0.4),
-        cpOffsetY: randomFloat(-h * 0.4, h * 0.4),
+        // We store the offset relative to cx, cy for the update physics engine
+        cpOffsetX: absoluteCpX - cx,
+        cpOffsetY: absoluteCpY - cy,
         
         phase: randomFloat(0, Math.PI * 2),
         speed: randomFloat(0.5, 2.0),
         
         // Current animated values
         currStartX: cx,
-        currStartY: -50,
+        currStartY: cy,
         currEndX: cx,
-        currEndY: h + 50,
+        currEndY: cy,
         currCpX: cx,
         currCpY: cy,
         
@@ -403,31 +446,51 @@ export class FiberSystem {
     }
     
     // Draw Nodes (Visual Hierarchy & Silhouette)
-    // We only draw nodes for Emergent Heroes to create an unmistakable focal structure
+    // Build a clear anatomical hierarchy outward from the brain
     ctx.globalAlpha = masterOpacity;
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
-      if (f.isEmergentHero) {
-        // Main structural node
+      
+      // Node position is at the end of the fiber (the peripheral synapse)
+      const nx = f.currEndX;
+      const ny = f.currEndY;
+      
+      if (f.hierarchyLevel === 'primary') {
+        // Major structural node (Synapse)
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-        ctx.arc(f.currCpX, f.currCpY, 2.5, 0, Math.PI * 2);
+        ctx.arc(nx, ny, 2.5, 0, Math.PI * 2);
         ctx.fill();
         
         // Faint glowing halo around major nodes
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.arc(f.currCpX, f.currCpY, 8, 0, Math.PI * 2);
+        ctx.arc(nx, ny, 8, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (f.hierarchyLevel === 'secondary') {
+        // Medium node
+        ctx.globalAlpha = masterOpacity * 0.7;
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.arc(nx, ny, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (f.hierarchyLevel === 'tertiary') {
+        // Tiny dust node
+        ctx.globalAlpha = masterOpacity * 0.4;
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.arc(nx, ny, 0.6, 0, Math.PI * 2);
         ctx.fill();
       }
     }
     
     // The Core Focal Point (The Brain)
+    ctx.globalAlpha = masterOpacity;
     ctx.beginPath();
     ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
     ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
     ctx.shadowBlur = 15;
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
