@@ -274,9 +274,25 @@ export class FiberSystem {
         unraveledCpY += Math.sin(twistAngle) * 40;
       }
       
-      // Editor's Cut: Organic metabolic breathing. Broken expectation.
+      // Editor's Cut: Organic metabolic breathing with asymmetric shifting center of gravity.
       const time = performance.now() * 0.001;
       let breath = this._calculateMetabolicBreath(time, f.speed, f.phase) * 8 * this._unravelProgress;
+      
+      // Calculate a drifting Center of Gravity for this fiber's breath
+      // Different fibers have slightly different sensitivities to the drift to create mass asymmetry
+      const cgDriftX = Math.sin(time * 0.3 + f.phase) * 80;
+      const cgDriftY = Math.cos(time * 0.4 + f.phase) * 80;
+      const cgX = cx + cgDriftX;
+      const cgY = cy + cgDriftY;
+      
+      // Vector from the shifting CG to the fiber's control point
+      const dxCg = unraveledCpX - cgX;
+      const dyCg = unraveledCpY - cgY;
+      const distCg = Math.sqrt(dxCg * dxCg + dyCg * dyCg) || 1;
+      
+      // Apply breath along that vector, not just diagonally
+      const breathDirX = (dxCg / distCg) * breath;
+      const breathDirY = (dyCg / distCg) * breath;
       
       if (pluckPhase === 'freeze') {
         breath = 0; // Absolute stillness
@@ -284,8 +300,8 @@ export class FiberSystem {
         unraveledCpY = cy;
       }
       
-      const targetCurrentCpX = lerp(cx, unraveledCpX + breath, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0) + (f.phantomTwitchTimer > 0 ? f.phantomTwitchX : 0);
-      const targetCurrentCpY = lerp(cy, unraveledCpY + breath, this._unravelProgress);
+      const targetCurrentCpX = lerp(cx, unraveledCpX + breathDirX, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0) + (f.phantomTwitchTimer > 0 ? f.phantomTwitchX : 0);
+      const targetCurrentCpY = lerp(cy, unraveledCpY + breathDirY, this._unravelProgress);
       
       // Defensive state snaps quickly, calm state flows slowly
       let responseSpeed = behaviorState === 'defensive' ? 12.0 : (4.0 * hierarchyMod);
