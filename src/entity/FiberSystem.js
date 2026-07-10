@@ -329,104 +329,106 @@ export class FiberSystem {
 
     if (introState === 'hiding') {
       ctx.save();
-      ctx.globalAlpha = 0.02 * masterOpacity; // Extremely faint presence
+      ctx.globalAlpha = 0.05 * masterOpacity; // Slightly more visible
       ctx.fillStyle = COLORS.WARM_WHITE;
       
-      // A subtle shimmer composed of a few tiny dots near the center that twitch organically
       const shimmerT = performance.now() * 0.002;
-      for (let i = 0; i < 5; i++) {
-         const nx = cx + (Math.sin(shimmerT * (i + 1) * 1.3) * 25);
-         const ny = cy + (Math.cos(shimmerT * (i + 2) * 1.7) * 25);
+      for (let i = 0; i < 3; i++) {
+         const nx = cx + (Math.sin(shimmerT * (i + 1) * 1.3) * 10);
+         const ny = cy + (Math.cos(shimmerT * (i + 2) * 1.7) * 10);
          
          ctx.beginPath();
-         ctx.arc(nx, ny, 1.0, 0, Math.PI * 2);
+         ctx.arc(nx, ny, 1.5, 0, Math.PI * 2);
          ctx.fill();
       }
       ctx.restore();
-      return; // Do not render the core line or fibers yet
+      return; 
     }
 
     ctx.save();
-    ctx.globalAlpha = masterOpacity * 0.4; // Soften fibers so they blend
-    ctx.strokeStyle = COLORS.WARM_WHITE;
-    ctx.globalCompositeOperation = 'screen';
     
-    // When not unraveled, we draw a thicker central core to feel physically present
+    // PREMIUM FIBER RENDERING
+    // Remove screen blending for crispness, use normal alpha blending with high contrast
+    ctx.globalCompositeOperation = 'source-over'; 
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // When not unraveled (The single resting line)
     if (this._unravelProgress === 0) {
-      // Find the first fiber to use as the base for the line
       const base = this._fibers[0];
       ctx.globalAlpha = masterOpacity;
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = 'rgba(245, 240, 232, 0.9)';
-      ctx.shadowColor = 'rgba(245, 240, 232, 0.5)';
-      ctx.shadowBlur = 10;
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 1.0)';
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
+      ctx.shadowBlur = 12;
       
       ctx.beginPath();
       ctx.moveTo(base.currStartX, base.currStartY);
-      // Optional: slight bezier curve even in base line to make tension visible
       ctx.quadraticCurveTo(base.currCpX, base.currCpY, base.currEndX, base.currEndY);
       ctx.stroke();
+      
+      // Central focal point
+      ctx.beginPath();
+      ctx.fillStyle = '#ffffff';
+      ctx.arc(base.currCpX, base.currCpY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      
       ctx.restore();
       return;
     }
 
-    // Unraveled rendering
-    ctx.shadowBlur = 0; // Disable shadow for performance and crispness
-    ctx.beginPath();
+    // UNRAVELED NEURAL ORGANISM (Readability Polish)
+    ctx.shadowBlur = 0; // Disable shadow for extreme sharpness
     
-
+    // Draw Fibers
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
-      // Modulate opacity by unravel progress, and CRITICALLY by standoff/recoil if it's an emergent hero.
-      let opacity = f.baseOpacity * masterOpacity * (0.1 + this._unravelProgress * 0.9);
-      let lineWidthMod = temperament < 0 
-        ? 1.0 + (Math.abs(temperament) * 0.5) 
-        : 1.0 - (temperament * 0.2);
+      // Reduce baseline opacity to create negative space, but make heroes extremely sharp
+      let opacity = f.baseOpacity * masterOpacity * (0.05 + this._unravelProgress * 0.95);
+      let lineWidthMod = 1.0;
         
-      // Emergent Hero Logic: Only lights up when the environment demands it
       if (f.isEmergentHero) {
-         const tensionSpike = Math.max(standoffIntensity, (this._recoilOvershoot && this._recoilOvershoot > 0) ? 1.0 : 0);
-         if (tensionSpike > 0) {
-            opacity += tensionSpike * 0.8; // Spikes to 80% opacity
-            lineWidthMod += tensionSpike * 5.0; // Spikes to 2.0+ width
-         }
-      }
-
-      // Mutual Hesitation Standoff Effects
-      let jitterX = 0;
-      let jitterY = 0;
-      if (standoffIntensity > 0) {
-         if (standoffContext === 'suspicion') {
-            // Trembling standoff
-            jitterX = (Math.random() - 0.5) * standoffIntensity * 4.0;
-            lineWidthMod *= (1.0 + standoffIntensity * 0.3); // Thicker with tension
-         } else if (standoffContext === 'curiosity') {
-            // Reaching out slowly
-            lineWidthMod *= (1.0 - standoffIntensity * 0.2); // Thinner, more delicate
-         }
+         opacity = 0.8 * masterOpacity; // Sharp contrast
+         lineWidthMod = 2.0; 
       }
 
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
-      ctx.strokeStyle = 'rgba(245, 240, 232, 1)';
+      ctx.strokeStyle = f.isEmergentHero ? 'rgba(255, 255, 255, 0.9)' : 'rgba(200, 200, 200, 0.4)';
       
       ctx.beginPath();
       ctx.moveTo(f.currStartX, f.currStartY);
-      
-      // Editor's Cut: Fracture the line during extreme tension so it doesn't look like a bezier curve
-      const isExtremeTension = (f.isEmergentHero && Math.max(standoffIntensity, (this._recoilOvershoot && this._recoilOvershoot > 0) ? 1.0 : 0) > 0.5);
-      
-      if (isExtremeTension) {
-         // Draw a fractured line with a sharp, jittery vertex
-         ctx.lineTo(f.currCpX + jitterX + (Math.random() - 0.5) * 20, f.currCpY + jitterY + (Math.random() - 0.5) * 20);
-         ctx.lineTo(f.currEndX, f.currEndY);
-      } else {
-         // Smooth curve for calm state
-         ctx.quadraticCurveTo(f.currCpX + jitterX, f.currCpY + jitterY, f.currEndX, f.currEndY);
-      }
-      
+      ctx.quadraticCurveTo(f.currCpX, f.currCpY, f.currEndX, f.currEndY);
       ctx.stroke();
     }
+    
+    // Draw Nodes (Visual Hierarchy & Silhouette)
+    // We only draw nodes for Emergent Heroes to create an unmistakable focal structure
+    ctx.globalAlpha = masterOpacity;
+    for (let i = 0; i < this._numFibers; i++) {
+      const f = this._fibers[i];
+      if (f.isEmergentHero) {
+        // Main structural node
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+        ctx.arc(f.currCpX, f.currCpY, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Faint glowing halo around major nodes
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.arc(f.currCpX, f.currCpY, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // The Core Focal Point (The Brain)
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+    ctx.shadowBlur = 15;
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
     
     ctx.restore();
   }
