@@ -42,6 +42,11 @@ export class CustomCursor {
     
     // Have we received the first input? (to prevent drawing before mouse moves)
     this._hasInput = false;
+    
+    // Signature Moment Override
+    this._isAbsorbed = false;
+    this._absorbTargetX = 0;
+    this._absorbTargetY = 0;
 
     EventBus.on(EVENTS.INTRO_REVEALED, () => {
       this._targetOpacity = 1.0;
@@ -66,7 +71,30 @@ export class CustomCursor {
         this._vy = y;
         this._hasInput = true;
       }
+      
+      // If absorbed, do not allow user to control target position
+      if (this._isAbsorbed) {
+        this._targetX = this._absorbTargetX;
+        this._targetY = this._absorbTargetY;
+      }
     });
+  }
+
+  /**
+   * Visually pulls the cursor into the center and hides it.
+   */
+  absorb(cx, cy) {
+    this._isAbsorbed = true;
+    this._absorbTargetX = cx;
+    this._absorbTargetY = cy;
+    this._targetX = cx;
+    this._targetY = cy;
+    this._targetOpacity = 0.0;
+  }
+  
+  release() {
+    this._isAbsorbed = false;
+    this._targetOpacity = 1.0;
   }
 
   /**
@@ -94,6 +122,14 @@ export class CustomCursor {
 
     // 2. Click Scale Recovery (fast spring back to 1.0)
     this._currentScale = lerp(this._currentScale, this._targetScale, 15 * deltaSeconds);
+    
+    // If absorbed, pull incredibly fast to center (gravitational singularity)
+    if (this._isAbsorbed) {
+       this._vx = lerp(this._vx, this._absorbTargetX, 8.0 * deltaSeconds);
+       this._vy = lerp(this._vy, this._absorbTargetY, 8.0 * deltaSeconds);
+       // Shrink into nothingness
+       this._currentScale = lerp(this._currentScale, 0.0, 5.0 * deltaSeconds);
+    }
   }
 
   /**

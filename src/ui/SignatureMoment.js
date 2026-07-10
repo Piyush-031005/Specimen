@@ -61,8 +61,8 @@ export class SignatureMoment {
     // Broadcast audio/behavior change - silence everything
     EventBus.emit(EVENTS.SIGNATURE_MOMENT_START);
     
-    // Hide the cursor
-    this._cursor.opacity = 0;
+    // Hide the cursor by absorbing it into the center
+    this._cursor.absorb(this._coords.center.x, this._coords.center.y);
 
     // Silence for 2 seconds, then show single glowing fiber
     setTimeout(() => {
@@ -77,7 +77,7 @@ export class SignatureMoment {
     this._isActive = false;
     
     // Show cursor again
-    this._cursor.opacity = 1;
+    this._cursor.release();
     
     // Reset Entity state to 1px line
     EventBus.emit(EVENTS.BEHAVIOR_STATE_CHANGED, { state: BEHAVIOR_STATES.DEFENSIVE });
