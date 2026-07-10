@@ -232,16 +232,21 @@ export class Renderer {
 
     if (REALITY_LAWS.LIVING_DARKNESS) {
       // The Physics: Darkness has immense inertia, guided by certainty.
-      // Target radius: max when certainty is high, tiny when certainty is 0.
+      // Editor's Cut: Negative space is potential. The edge vibrates subtly when tension is high (certainty is low).
       const maxRadius = Math.max(cx, cy) * 1.5;
       const targetRadius = 100 + (maxRadius * this._worldCertainty);
       
       const decaySpeed = 0.3; // extremely slow liquid inertia
       this._darknessRadius = this._darknessRadius + (targetRadius - this._darknessRadius) * (1.0 - Math.exp(-decaySpeed * this._tickData.deltaSeconds));
 
-      const darkGradient = this._ctx.createRadialGradient(this._distX, this._distY, this._darknessRadius * 0.2, this._distX, this._distY, this._darknessRadius);
+      const tensionVibration = (1.0 - this._worldCertainty) * Math.sin(this._tickData.now * 0.003) * 30.0;
+      const innerRad = Math.max(0, this._darknessRadius * 0.2 + tensionVibration);
+      const outerRad = Math.max(1, this._darknessRadius + tensionVibration * 0.5);
+
+      const darkGradient = this._ctx.createRadialGradient(this._distX, this._distY, innerRad, this._distX, this._distY, outerRad);
       darkGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      darkGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.8)');
+      darkGradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.5)'); // Sharper falloff (feels heavier)
+      darkGradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.95)');
       darkGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
 
       this._ctx.fillStyle = darkGradient;
