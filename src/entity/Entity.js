@@ -158,11 +158,19 @@ export class Entity {
   init() {
     this._birthTime = performance.now();
     
-    // 0.2s: Instantly appear (masterOpacity = 1)
+    // 0.0s -> Darkness (opacity 0)
+    this._state.masterOpacity = 0;
+
+    // 0.8s -> Tiny neural pulse
+    setTimeout(() => {
+      EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
+    }, 800);
+
+    // 1.5s -> Living structure slowly appears over 2.5 seconds
     this._scheduler.schedule({
       name:     'entity-birth',
-      duration: 100,
-      delay:    200,
+      duration: 2500,
+      delay:    1500,
       easing:   smootherstep,
       onUpdate: (t) => {
         this._state.masterOpacity = t;
