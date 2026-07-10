@@ -169,17 +169,12 @@ export class FiberSystem {
     const baseStartY = cy - (h * 0.4);
     const baseEndY = cy + (h * 0.4);
 
+    // Curiosity Phase: The occasional twitch removed. 
+    // Editor's Cut: 95% barely perceptible change. Metabolic breath drives idle life.
     // Tension Phase: The Taut Wire Vibrates
     let globalVibrationX = 0;
     if (pluckPhase === 'tension') {
       globalVibrationX = (Math.random() - 0.5) * 12.0; // Harsh, erratic vibration
-    }
-    
-    // Curiosity Phase: The occasional twitch (before pluck)
-    if (pluckPhase === 'idle' && this._unravelProgress === 0 && introState !== 'hiding') {
-      if (Math.random() < 0.02) { // 2% chance per frame to twitch
-        globalVibrationX = (Math.random() - 0.5) * 4.0;
-      }
     }
     
     for (let i = 0; i < this._numFibers; i++) {
