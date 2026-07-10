@@ -396,7 +396,19 @@ export class FiberSystem {
       
       ctx.beginPath();
       ctx.moveTo(f.currStartX, f.currStartY);
-      ctx.quadraticCurveTo(f.currCpX + jitterX, f.currCpY + jitterY, f.currEndX, f.currEndY);
+      
+      // Editor's Cut: Fracture the line during extreme tension so it doesn't look like a bezier curve
+      const isExtremeTension = (f.isEmergentHero && Math.max(standoffIntensity, (this._recoilOvershoot && this._recoilOvershoot > 0) ? 1.0 : 0) > 0.5);
+      
+      if (isExtremeTension) {
+         // Draw a fractured line with a sharp, jittery vertex
+         ctx.lineTo(f.currCpX + jitterX + (Math.random() - 0.5) * 20, f.currCpY + jitterY + (Math.random() - 0.5) * 20);
+         ctx.lineTo(f.currEndX, f.currEndY);
+      } else {
+         // Smooth curve for calm state
+         ctx.quadraticCurveTo(f.currCpX + jitterX, f.currCpY + jitterY, f.currEndX, f.currEndY);
+      }
+      
       ctx.stroke();
     }
     
