@@ -246,7 +246,13 @@ export class Renderer {
       const decaySpeed = 0.3; // extremely slow liquid inertia
       this._darknessRadius = this._darknessRadius + (targetRadius - this._darknessRadius) * (1.0 - Math.exp(-decaySpeed * this._tickData.deltaSeconds));
 
-      const tensionVibration = (1.0 - this._worldCertainty) * Math.sin(this._tickData.now * 0.003) * 30.0;
+      // Editor's Cut: True tension is arrhythmic. Compound waves replace the perfect metronomic sine.
+      const t1 = Math.sin(this._tickData.now * 0.002);
+      const t2 = Math.cos(this._tickData.now * 0.0053);
+      const t3 = Math.sin(this._tickData.now * 0.0089);
+      const arrhythmicThrob = t1 * t2 * t3; // Unpredictable pulsing
+      
+      const tensionVibration = (1.0 - this._worldCertainty) * arrhythmicThrob * 40.0;
       const innerRad = Math.max(0, this._darknessRadius * 0.2 + tensionVibration);
       const outerRad = Math.max(1, this._darknessRadius + tensionVibration * 0.5);
 
