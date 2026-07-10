@@ -96,6 +96,38 @@ export class FiberSystem {
   }
 
   /**
+   * Organic Metabolic Breathing Cycle
+   * Breaks predictability. Replaces sine waves with a biological respiration cycle:
+   * hold -> tiny inhale -> exhale -> pause -> deep inhale -> tension/shake -> long exhale
+   */
+  _calculateMetabolicBreath(time, speed, phase) {
+      const cycleLength = 12.0 / speed;
+      const t = (time + phase) % cycleLength;
+      const progress = t / cycleLength; // 0 to 1
+
+      if (progress < 0.2) return 0; // Hold
+      if (progress < 0.3) { // Tiny inhale
+         const p = (progress - 0.2) / 0.1;
+         return Math.sin(p * Math.PI / 2) * 0.2; 
+      }
+      if (progress < 0.4) { // Tiny exhale
+         const p = (progress - 0.3) / 0.1;
+         return 0.2 * Math.cos(p * Math.PI / 2);
+      }
+      if (progress < 0.6) return 0; // Pause
+      if (progress < 0.75) { // Deep inhale
+         const p = (progress - 0.6) / 0.15;
+         return Math.sin(p * Math.PI / 2) * 1.0;
+      }
+      if (progress < 0.8) { // Tension / micro shake
+         return 1.0 + (Math.random() - 0.5) * 0.05;
+      }
+      // Long exhale
+      const p = (progress - 0.8) / 0.2;
+      return Math.cos(p * Math.PI / 2);
+  }
+
+  /**
    * Update fiber physics
    */
   update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0) {
@@ -247,10 +279,9 @@ export class FiberSystem {
         unraveledCpY += Math.sin(twistAngle) * 40;
       }
       
-      // Add subtle breathing noise (mostly static, minimal life)
-      // Film Cut: Add variation so breathing is less predictable
+      // Editor's Cut: Organic metabolic breathing. Broken expectation.
       const time = performance.now() * 0.001;
-      let breath = (Math.sin(time * f.speed + f.phase) * 0.6 + Math.sin(time * f.speed * 0.33 + f.phase * 2) * 0.4) * 6 * this._unravelProgress;
+      let breath = this._calculateMetabolicBreath(time, f.speed, f.phase) * 8 * this._unravelProgress;
       
       if (pluckPhase === 'freeze') {
         breath = 0; // Absolute stillness
