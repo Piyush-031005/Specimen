@@ -31,7 +31,7 @@ import { RhythmMatcher } from './pattern/RhythmMatcher.js';
 import { BehaviorEngine } from './behavior/BehaviorEngine.js';
 
 import { WorldEngine } from './world/WorldEngine.js';
-import { ParticleManager } from './world/ParticleManager.js';
+
 
 import { AudioEngine } from './audio/AudioEngine.js';
 import { MemorySystem } from './memory/MemorySystem.js';
@@ -50,7 +50,7 @@ const memory        = new MemorySystem();
 const coords        = new CoordinateSystem();
 const renderer      = new Renderer(canvas);
 const scheduler     = new AnimationScheduler();     // Self-wires to RENDER_TICK
-const particles     = new ParticleManager(memory);  // eslint-disable-line no-unused-vars
+
 const worldEngine   = new WorldEngine();
 const tolerance     = new ToleranceSystem();
 const pulseGen      = new PulseGenerator();
