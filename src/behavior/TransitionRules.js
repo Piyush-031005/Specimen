@@ -17,6 +17,7 @@ import { BEHAVIOR_STATES, TRUST } from '../constants.js';
  * @property {number} trust — Current trust [0, 100]
  * @property {number} recentMatchRate — [0, 1] match rate over last 10 interactions
  * @property {number} idleSeconds — How long since last user input
+ * @property {Record<string, number>} stateVisits — Number of times each state was entered
  */
 
 /**
@@ -25,7 +26,7 @@ import { BEHAVIOR_STATES, TRUST } from '../constants.js';
  * @returns {string|null} New state, or null if no transition.
  */
 export function evaluateTransition(ctx) {
-  const { currentState, trust, recentMatchRate, idleSeconds } = ctx;
+  const { currentState, trust, recentMatchRate, idleSeconds, stateVisits = {} } = ctx;
 
   // ─── Universal: Observing trigger ─────────────────────────────────────────
   // Entity randomly decides to observe — becomes still and silent.
@@ -39,16 +40,22 @@ export function evaluateTransition(ctx) {
 
   // ─── State-specific Transition Logic ──────────────────────────────────────
   
+  // Permanently alter thresholds based on history.
+  // E.g., if we've been Curious before, it takes more effort to make us Curious again.
+  const curiousVisits = stateVisits[BEHAVIOR_STATES.CURIOUS] || 0;
+  const hesitantVisits = stateVisits[BEHAVIOR_STATES.HESITANT] || 0;
+  const trustingVisits = stateVisits[BEHAVIOR_STATES.TRUSTING] || 0;
+  
   switch (currentState) {
     case BEHAVIOR_STATES.CALM:
-      if (trust >= 75 && recentMatchRate >= 0.7) {
+      if (trust >= 75 + (trustingVisits * 10) && recentMatchRate >= 0.7) {
         return BEHAVIOR_STATES.TRUSTING;
       }
-      if (idleSeconds < 3 && recentMatchRate >= 0.5) {
-        // Active interaction but not yet fully trusting
+      if (idleSeconds < 3 && recentMatchRate >= (0.5 + curiousVisits * 0.1)) {
+        // Active interaction but not yet fully trusting (gets harder to impress)
         return BEHAVIOR_STATES.CURIOUS;
       }
-      if (idleSeconds > 12) {
+      if (idleSeconds > 12 - (hesitantVisits * 2)) {
         return BEHAVIOR_STATES.HESITANT;
       }
       if (recentMatchRate <= 0.3 && trust < 40) {
@@ -57,11 +64,11 @@ export function evaluateTransition(ctx) {
       break;
 
     case BEHAVIOR_STATES.CURIOUS:
-      if (trust >= 75 && recentMatchRate >= 0.7) {
+      if (trust >= 75 + (trustingVisits * 10) && recentMatchRate >= 0.7) {
         return BEHAVIOR_STATES.TRUSTING;
       }
-      if (idleSeconds > 8) {
-        return BEHAVIOR_STATES.CALM;
+      if (idleSeconds > 8 - (curiousVisits * 2)) {
+        return BEHAVIOR_STATES.CALM; // Gets bored faster if you've done this before
       }
       if (recentMatchRate <= 0.4) {
         return BEHAVIOR_STATES.HESITANT;
@@ -69,11 +76,11 @@ export function evaluateTransition(ctx) {
       break;
 
     case BEHAVIOR_STATES.HESITANT:
-      if (idleSeconds < 4 && recentMatchRate >= 0.6) {
+      if (idleSeconds < 4 && recentMatchRate >= (0.6 + curiousVisits * 0.1)) {
         return BEHAVIOR_STATES.CURIOUS;
       }
-      if (idleSeconds > 15) {
-        return BEHAVIOR_STATES.DEFENSIVE; // Gives up after long idle
+      if (idleSeconds > 15 - (hesitantVisits * 3)) {
+        return BEHAVIOR_STATES.DEFENSIVE; // Gives up faster and faster
       }
       if (trust < 20 && recentMatchRate <= 0.2) {
         return BEHAVIOR_STATES.DEFENSIVE;
@@ -88,8 +95,8 @@ export function evaluateTransition(ctx) {
         // Starts opening up again when user proves consistency
         return BEHAVIOR_STATES.HESITANT;
       }
-      if (trust >= 35) {
-        return BEHAVIOR_STATES.CALM;
+      if (trust >= 35 + (hesitantVisits * 5)) {
+        return BEHAVIOR_STATES.CALM; // Harder to calm down if you keep scaring it
       }
       break;
 

@@ -44,6 +44,9 @@ export class BehaviorEngine {
     /** @type {number|null} Timestamp when current state was entered */
     this._stateEnteredAt = null;
 
+    /** @type {Record<string, number>} Track how many times each state is visited to permanently alter thresholds */
+    this._stateVisits = {};
+
     /** @type {number|null} Observing timeout handle */
     this._observingTimer = null;
 
@@ -146,6 +149,7 @@ export class BehaviorEngine {
         trust: this._trust,
         recentMatchRate: this._getRecentMatchRate(),
         idleSeconds: this._idleSeconds,
+        stateVisits: this._stateVisits,
       });
 
       if (newState && newState !== this._state) {
@@ -171,6 +175,7 @@ export class BehaviorEngine {
     const previous = this._state;
     this._state = newState;
     this._stateEnteredAt = performance.now();
+    this._stateVisits[newState] = (this._stateVisits[newState] || 0) + 1;
 
     if (newState === BEHAVIOR_STATES.OBSERVING) {
       this._preObservingState = previous;
