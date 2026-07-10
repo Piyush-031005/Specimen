@@ -84,6 +84,9 @@ export class Entity {
 
     /** @type {{ wx: number, wy: number }} Smoothed cursor lean */
     this._cursorLean  = { wx: 0, wy: 0 };
+    
+    /** @type {{ wx: number, wy: number }} Intent focus (very slow) */
+    this._intentFocus = { wx: 0, wy: 0 };
 
     this._lastInputTime = null;
 
@@ -242,14 +245,32 @@ export class Entity {
    */
   _updateCursorLean(deltaSeconds) {
     const isCurious = this._state.behaviorState === BEHAVIOR_STATES.CURIOUS;
-    const leanStrength = isCurious ? 0.06 : 0.01; // Always slightly aware now
+    
+    // Calculate cursor speed/volatility
+    const dx = this._cursorWorld.wx - this._intentFocus.wx;
+    const dy = this._cursorWorld.wy - this._intentFocus.wy;
+    const distToIntent = Math.sqrt(dx * dx + dy * dy);
+    
+    // Intent shifts very slowly towards the cursor, but only if cursor is relatively still.
+    // If they whip the mouse around (high distToIntent), intent drops back to center (withdraws).
+    if (distToIntent < 0.2) {
+      // Comfortably close, entity focuses on it slowly
+      this._intentFocus.wx = lerp(this._intentFocus.wx, this._cursorWorld.wx, 0.5 * deltaSeconds);
+      this._intentFocus.wy = lerp(this._intentFocus.wy, this._cursorWorld.wy, 0.5 * deltaSeconds);
+    } else {
+      // Moving too fast or too far away. Entity loses interest/focus.
+      this._intentFocus.wx = lerp(this._intentFocus.wx, 0, 1.0 * deltaSeconds);
+      this._intentFocus.wy = lerp(this._intentFocus.wy, 0, 1.0 * deltaSeconds);
+    }
 
-    // Target lean = a fraction of cursor world position
-    const targetLeanX = Math.max(-0.08, Math.min(0.08, this._cursorWorld.wx * leanStrength));
-    const targetLeanY = Math.max(-0.08, Math.min(0.08, this._cursorWorld.wy * leanStrength));
+    const leanStrength = isCurious ? 0.05 : 0.01; 
+
+    // Target lean is now based purely on the slow, filtered intent, not the raw pixel coords.
+    const targetLeanX = Math.max(-0.06, Math.min(0.06, this._intentFocus.wx * leanStrength));
+    const targetLeanY = Math.max(-0.06, Math.min(0.06, this._intentFocus.wy * leanStrength));
 
     // Smoothly approach target lean
-    const speed = isCurious ? 1.2 : 2.0; 
+    const speed = isCurious ? 0.8 : 1.5; 
     this._cursorLean.wx = lerp(this._cursorLean.wx, targetLeanX, speed * deltaSeconds);
     this._cursorLean.wy = lerp(this._cursorLean.wy, targetLeanY, speed * deltaSeconds);
 
