@@ -79,7 +79,13 @@ export class PulseRenderer {
     });
 
     EventBus.on(EVENTS.COMMUNICATION_MATCH, () => {
-      this._spawn(true);   // Response echo — electric blue, smaller, faster
+      // Editor's Cut: Expectation violation. 
+      // 10% chance to delay the echo to simulate hesitation/defiance.
+      if (Math.random() < 0.10) {
+        setTimeout(() => this._spawn(true), 500 + Math.random() * 500);
+      } else {
+        this._spawn(true);   // Response echo — electric blue, smaller, faster
+      }
     });
 
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
