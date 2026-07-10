@@ -1,5 +1,5 @@
 /**
- * SPECIMEN — PulseGenerator
+ * SPECIMEN — EntityHeartbeat
  *
  * The entity tries to communicate.
  * Emits pulses at deliberately non-deterministic intervals.
@@ -43,7 +43,7 @@ const PULSE_INTERVALS = {
   [BEHAVIOR_STATES.OBSERVING]: { min: 0,    max: 0    }, // Silent
 };
 
-export class PulseGenerator {
+export class EntityHeartbeat {
   constructor() {
     /** @type {string} */
     this._state = BEHAVIOR_STATES.CALM;

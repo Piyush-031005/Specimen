@@ -23,10 +23,10 @@ import { AnimationScheduler } from './engine/AnimationScheduler.js';
 
 import { Entity } from './entity/Entity.js';
 
-import { PulseGenerator } from './pattern/PulseGenerator.js';
-import { PulseRenderer } from './pattern/PulseRenderer.js';
-import { ToleranceSystem } from './pattern/ToleranceSystem.js';
-import { RhythmMatcher } from './pattern/RhythmMatcher.js';
+import { EntityHeartbeat } from './pattern/EntityHeartbeat.js';
+import { DisplacementWave } from './pattern/DisplacementWave.js';
+
+import { CommunicationWindow } from './pattern/CommunicationWindow.js';
 
 import { BehaviorEngine } from './behavior/BehaviorEngine.js';
 
@@ -36,8 +36,8 @@ import { WorldEngine } from './world/WorldEngine.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { MemorySystem } from './memory/MemorySystem.js';
 
-import { CustomCursor } from './ui/CustomCursor.js';
-import { SignatureMoment } from './ui/SignatureMoment.js';
+import { CustomCursor } from './director/CustomCursor.js';
+import { SignatureMoment } from './director/SignatureMoment.js';
 
 import { EventBus } from './utils/EventBus.js';
 import { EVENTS } from './constants.js';
@@ -52,10 +52,9 @@ const renderer      = new Renderer(canvas);
 const scheduler     = new AnimationScheduler();     // Self-wires to RENDER_TICK
 
 const worldEngine   = new WorldEngine();
-const tolerance     = new ToleranceSystem();
-const pulseGen      = new PulseGenerator();
-const pulseRenderer = new PulseRenderer(coords);   // eslint-disable-line no-unused-vars
-const rhythmMatcher = new RhythmMatcher(tolerance); // eslint-disable-line no-unused-vars
+const heartbeat     = new EntityHeartbeat();
+const displacementWave = new DisplacementWave(coords);   // eslint-disable-line no-unused-vars
+const commWindow    = new CommunicationWindow(); // eslint-disable-line no-unused-vars
 const behavior      = new BehaviorEngine(memory);
 const audio         = new AudioEngine(memory);
 const entity        = new Entity(coords, scheduler, memory);
@@ -146,7 +145,7 @@ renderer.start();
 entity.init();
 
 // 7. Pulse generator starts (first pulse after TIMING.FIRST_PULSE_DELAY_MS)
-pulseGen.start();
+heartbeat.start();
 
 // The Impossible Observation (Scene 1): Prove reality exists before interaction
 setTimeout(() => {

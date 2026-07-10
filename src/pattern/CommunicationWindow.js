@@ -1,5 +1,5 @@
 /**
- * SPECIMEN — RhythmMatcher
+ * SPECIMEN — CommunicationWindow
  *
  * Detects whether the visitor's response falls within the communication window.
  * This is the core of the encounter mechanic.
@@ -25,14 +25,15 @@
  */
 
 import { EventBus } from '../utils/EventBus.js';
+import { mapRange } from '../utils/MathUtils.js';
 import { EVENTS } from '../constants.js';
 
-export class RhythmMatcher {
-  /**
-   * @param {import('./ToleranceSystem.js').ToleranceSystem} tolerance
-   */
-  constructor(tolerance) {
-    this._tolerance = tolerance;
+const MAX_WINDOW_MS = 700;
+const MIN_WINDOW_MS = 200;
+
+export class CommunicationWindow {
+  constructor() {
+    this._trust = 0;
 
     // ─── Window state ─────────────────────────────────────────────────────
     /** @type {number|null} performance.now() when last pulse was emitted */
@@ -57,6 +58,10 @@ export class RhythmMatcher {
 
     EventBus.on(EVENTS.USER_INPUT, (inputData) => {
       this._onUserInput(inputData);
+    });
+    
+    EventBus.on(EVENTS.BEHAVIOR_TRUST_UPDATED, ({ trust }) => {
+      this._trust = trust;
     });
   }
 
@@ -86,7 +91,7 @@ export class RhythmMatcher {
     if (!this._windowOpen || this._windowOpenedAt === null) return;
 
     const responseTimeMs = now - this._windowOpenedAt;
-    const maxWindow      = this._tolerance.maxWindowMs;
+    const maxWindow      = mapRange(this._trust, 0, 100, MAX_WINDOW_MS, MIN_WINDOW_MS);
 
     // Window has expired — late response, not a match
     if (responseTimeMs > maxWindow) {

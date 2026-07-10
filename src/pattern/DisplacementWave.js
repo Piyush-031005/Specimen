@@ -1,5 +1,5 @@
 /**
- * SPECIMEN — PulseRenderer
+ * SPECIMEN — DisplacementWave
  *
  * Renders expanding ring pulses on the canvas.
  * Purely visual — no game logic, no timing decisions.
@@ -44,7 +44,7 @@ const ENTITY_WORLD_RADIUS = 0.45;
  * @property {boolean} isResponse    — true = match echo (electric blue), false = entity pulse (warm white)
  */
 
-export class PulseRenderer {
+export class DisplacementWave {
   /**
    * @param {import('../engine/CoordinateSystem.js').CoordinateSystem} coords
    */
