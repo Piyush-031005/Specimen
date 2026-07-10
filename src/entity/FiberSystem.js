@@ -146,11 +146,11 @@ export class FiberSystem {
     const timeSinceUnravel = isUnraveled ? (performance.now() - (this._unravelStartTime || 0)) : Infinity;
     
     // Math-based Overshoot logic (Shock Phase)
-    let recoilOvershoot = 0;
+    this._recoilOvershoot = 0;
     if (isUnraveled && timeSinceUnravel < 200) {
       // Film Cut: Compress Pluck recoil to 200ms for punchiness
       const t = timeSinceUnravel / 200; // 0 to 1
-      recoilOvershoot = Math.sin(t * Math.PI) * (1 - t) * 1.5; 
+      this._recoilOvershoot = Math.sin(t * Math.PI) * (1 - t) * 1.5; 
       globalSpringSpeed = 40.0; // Inevitable, massive velocity
     } else if (isUnraveled) {
       globalSpringSpeed = 10.0; // Settling velocity
@@ -250,8 +250,8 @@ export class FiberSystem {
       
       // Intrusive Cursor: The user is trespassing. Fibers bend OUT OF THE WAY to accommodate the intrusion.
       // We calculate distance from the unraveled control point to the cursor.
-      let unraveledCpX = cx + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * recoilOvershoot);
-      let unraveledCpY = cy + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * recoilOvershoot);
+      let unraveledCpX = cx + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * this._recoilOvershoot);
+      let unraveledCpY = cy + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * this._recoilOvershoot);
       
       if (isUnraveled && pluckPhase !== 'freeze') {
         const dx = unraveledCpX - finalTargetCpX;
@@ -290,7 +290,7 @@ export class FiberSystem {
       // Defensive state snaps quickly, calm state flows slowly
       let responseSpeed = behaviorState === 'defensive' ? 12.0 : (4.0 * hierarchyMod);
       if (pluckPhase === 'tension') responseSpeed = 40.0;
-      if (recoilOvershoot > 0) responseSpeed = 50.0; // Exploding outward
+      if (this._recoilOvershoot > 0) responseSpeed = 50.0; // Exploding outward
       if (pluckPhase === 'freeze') responseSpeed = 100.0; // Instant lock
       
       f.currCpX = expDecay(f.currCpX, targetCurrentCpX, responseSpeed, deltaSeconds);
@@ -369,7 +369,7 @@ export class FiberSystem {
         
       // Emergent Hero Logic: Only lights up when the environment demands it
       if (f.isEmergentHero) {
-         const tensionSpike = Math.max(standoffIntensity, recoilOvershoot > 0 ? 1.0 : 0);
+         const tensionSpike = Math.max(standoffIntensity, (this._recoilOvershoot && this._recoilOvershoot > 0) ? 1.0 : 0);
          if (tensionSpike > 0) {
             opacity += tensionSpike * 0.8; // Spikes to 80% opacity
             lineWidthMod += tensionSpike * 5.0; // Spikes to 2.0+ width

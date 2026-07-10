@@ -58,6 +58,9 @@ export class Renderer {
     /** @type {PerformanceMonitor} */
     this._perf = new PerformanceMonitor();
 
+    /** @type {CanvasPattern|null} */
+    this._noisePattern = null;
+
     /** @type {number|null} requestAnimationFrame handle */
     this._rafHandle = null;
 
@@ -199,8 +202,12 @@ export class Renderer {
     const cx = this._tickData.cssWidth / 2;
     const cy = this._tickData.cssHeight / 2;
 
-    // Base background
-    this._ctx.fillStyle = '#000000';
+    // Base background (Microscopically noisy floor instead of dead #000000)
+    if (this._noisePattern) {
+      this._ctx.fillStyle = this._noisePattern;
+    } else {
+      this._ctx.fillStyle = '#050505'; // Fallback slightly above 0
+    }
     this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
 
     // Gravitational distortion (faint glow following cursor/entity)
@@ -289,6 +296,11 @@ export class Renderer {
     // Apply DPR transform once per resize — drawing code always uses CSS pixels
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // Rebuild noise pattern if missing (size doesn't matter since it repeats)
+    if (!this._noisePattern) {
+      this._buildNoisePattern();
+    }
+
     // Update tick data dimensions (pre-allocated object)
     this._tickData.dpr       = dpr;
     this._tickData.width     = width;
@@ -299,5 +311,32 @@ export class Renderer {
     EventBus.emit(EVENTS.RESIZE, {
       width, height, cssWidth, cssHeight, dpr,
     });
+  }
+
+  /**
+   * Builds a static 128x128 noise pattern to prevent the screen from feeling dead.
+   * @private
+   */
+  _buildNoisePattern() {
+    const size = 128;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = size;
+    offCanvas.height = size;
+    const offCtx = offCanvas.getContext('2d', { alpha: false });
+    if (!offCtx) return;
+
+    const imgData = offCtx.createImageData(size, size);
+    const data = imgData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const v = Math.random() * 8; // Very subtle noise (0-8 out of 255)
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v + 1; // Slight blue tint
+      data[i + 3] = 255;
+    }
+    
+    offCtx.putImageData(imgData, 0, 0);
+    this._noisePattern = this._ctx.createPattern(offCanvas, 'repeat');
   }
 }
