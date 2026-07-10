@@ -82,7 +82,7 @@ class EventBusClass {
       try {
         handler(payload);
       } catch (err) {
-        console.error(`[EventBus] Error in handler for "${event}":`, err);
+        // Production: fail silently
       }
     }
   }

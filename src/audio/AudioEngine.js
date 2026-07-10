@@ -135,7 +135,7 @@ export class AudioEngine {
       this._ctx.resume().then(() => {
         this._unlocked = true;
         this._atmosphereSynth.start();
-        console.log('AudioContext unlocked.');
+        // AudioContext unlocked.
       });
     } else {
       this._unlocked = true;
