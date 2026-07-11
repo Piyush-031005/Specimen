@@ -118,19 +118,26 @@ export class FiberSystem {
       const bowMultiplier = hierarchyLevel === 'primary' ? 0.3 : 0.8;
       const bowMagnitude = randomFloat(-w * 0.1, w * 0.1) * radiusMod * bowMultiplier;
       
+      // We store the offset relative to cx, cy for the update physics engine
       const absoluteCpX = midX + normalX * bowMagnitude;
       const absoluteCpY = midY + normalY * bowMagnitude;
+      
+      // Calculate angular sorting for membrane generation
+      const renderAngle = Math.atan2(spreadY, spreadX);
 
       this._fibers.push({
         tStartX: startX,
         tStartY: startY,
         tEndX: endX,
         tEndY: endY,
+        angle: renderAngle,
         
         isEmergentHero,
         hierarchyLevel,
         lineWidth,
         baseOpacity,
+        z: randomFloat(-1.0, 1.0), // Z-depth for parallax
+        isDeepRed: randomFloat(0, 1) < 0.08, // Rare deep background branches
         
         // We store the offset relative to cx, cy for the update physics engine
         cpOffsetX: absoluteCpX - cx,
@@ -156,6 +163,9 @@ export class FiberSystem {
         phantomTwitchX: 0
       });
     }
+    
+    // Sort fibers by angle so membrane webbing connects adjacent limbs smoothly, not across the whole organism
+    this._fibers.sort((a, b) => a.angle - b.angle);
   }
 
   /**
@@ -194,13 +204,13 @@ export class FiberSystem {
    * Update fiber physics
    */
   update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0) {
-    // Track cursor for render
-    this._cursorX = targetCpX;
-    this._cursorY = targetCpY;
+    // Track cursor for render. Fallback to center to prevent NaN if undefined.
+    this._cursorX = targetCpX !== undefined ? targetCpX : this._coords.center.x;
+    this._cursorY = targetCpY !== undefined ? targetCpY : this._coords.center.y;
     
     // Delayed cursor for network reaction (Eye reacts instantly, network lags ~100ms)
-    this._glowCursorX = expDecay(this._glowCursorX, targetCpX, 10.0, deltaSeconds);
-    this._glowCursorY = expDecay(this._glowCursorY, targetCpY, 10.0, deltaSeconds);
+    this._glowCursorX = expDecay(this._glowCursorX, this._cursorX, 10.0, deltaSeconds);
+    this._glowCursorY = expDecay(this._glowCursorY, this._cursorY, 10.0, deltaSeconds);
     
     // Determine target progress
     let targetProgress = isUnraveled ? 1.0 : 0.0;
@@ -328,12 +338,18 @@ export class FiberSystem {
       } else {
         tensionMod *= (1.0 + (temperament * 0.3)); // Reaches out 30% further
       }
+      
+      // Fix: Use this._coords.cssWidth/cssHeight directly instead of undefined 'w'/'h'
+      const pxC = (this._cursorX - cx) / this._coords.cssWidth;
+      const pyC = (this._cursorY - cy) / this._coords.cssHeight;
+      const parallaxX = pxC * f.z * 15.0 * this._unravelProgress;
+      const parallaxY = pyC * f.z * 15.0 * this._unravelProgress;
 
       // Target anchor points based on unravel progress and tension
-      const targetStartX = lerp(cx, lerp(this._brainX, f.tStartX, tensionMod), this._unravelProgress);
-      const targetStartY = lerp(baseStartY, lerp(this._brainY, f.tStartY, tensionMod), this._unravelProgress);
-      const targetEndX = lerp(cx, lerp(cx, f.tEndX, tensionMod), this._unravelProgress);
-      const targetEndY = lerp(baseEndY, lerp(cy, f.tEndY, tensionMod), this._unravelProgress);
+      const targetStartX = lerp(cx, lerp(this._brainX, f.tStartX, tensionMod), this._unravelProgress) + parallaxX;
+      const targetStartY = lerp(baseStartY, lerp(this._brainY, f.tStartY, tensionMod), this._unravelProgress) + parallaxY;
+      const targetEndX = lerp(cx, lerp(cx, f.tEndX, tensionMod), this._unravelProgress) + parallaxX;
+      const targetEndY = lerp(baseEndY, lerp(cy, f.tEndY, tensionMod), this._unravelProgress) + parallaxY;
       
       f.currStartX = targetStartX + (this._unravelProgress === 0 ? globalVibrationX : 0);
       f.currStartY = targetStartY;
@@ -433,8 +449,12 @@ export class FiberSystem {
         unraveledCpY = cy;
       }
       
-      const targetCurrentCpX = lerp(cx, unraveledCpX + breathDirX, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0) + (f.phantomTwitchTimer > 0 ? f.phantomTwitchX : 0);
-      const targetCurrentCpY = lerp(cy, unraveledCpY + breathDirY, this._unravelProgress);
+      // THE BIG JUMP: Tentacle Wriggle (Aquatic, alien writhing)
+      const wriggleX = Math.cos(time * f.speed * 2.0 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      const wriggleY = Math.sin(time * f.speed * 2.5 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      
+      const targetCurrentCpX = lerp(cx, unraveledCpX + breathDirX, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0) + (f.phantomTwitchTimer > 0 ? f.phantomTwitchX : 0) + parallaxX + wriggleX;
+      const targetCurrentCpY = lerp(cy, unraveledCpY + breathDirY, this._unravelProgress) + parallaxY + wriggleY;
       
       // Defensive state snaps quickly, calm state flows slowly
       let responseSpeed = behaviorState === 'defensive' ? 12.0 : (4.0 * hierarchyMod);
@@ -566,7 +586,7 @@ export class FiberSystem {
          lineWidthMod += f.memoryTrace * 0.8;
       }
       
-      // Add Synaptic Glow
+      // Add Synaptic Glow (Bioluminescent Cyan/Blue when active)
       opacity = Math.min(1.0, opacity + (f.synapticGlow * 0.8 * contrastMasterOpacity));
       if (f.synapticGlow > 0.1) {
          lineWidthMod += f.synapticGlow * 1.5;
@@ -575,14 +595,21 @@ export class FiberSystem {
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
       
-      // If fiber has strong memory, it turns slightly warm gold-white instead of cool white
-      const r = 255;
-      const g = 255;
-      const b = Math.floor(255 - (f.memoryTrace * 50)); // Reduces blue to make it warm
+      // Bioluminescence and Deep Red Background
+      let r = 255, g = 255, b = 255;
       
-      ctx.strokeStyle = f.isEmergentHero || f.synapticGlow > 0.3 || f.memoryTrace > 0.5 
-                        ? `rgba(${r}, ${g}, ${b}, 0.9)` 
-                        : 'rgba(200, 200, 200, 0.4)';
+      if (f.isDeepRed) {
+         r = 150; g = 10; b = 10; // Deep fleshy red for the background
+         ctx.globalAlpha = opacity * 0.7; // Push it further back
+      } else if (f.synapticGlow > 0.1) {
+         r = Math.floor(255 - (f.synapticGlow * 200)); // Becomes Deep Cyan/Aqua
+         g = 255;
+         b = 255;
+      } else if (f.memoryTrace > 0.01) {
+         b = Math.floor(255 - (f.memoryTrace * 50)); // Gold for memory
+      }
+      
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
       
       ctx.beginPath();
       ctx.moveTo(f.currStartX, f.currStartY);
@@ -611,24 +638,47 @@ export class FiberSystem {
         
         // Confident glowing halo around major nodes
         ctx.beginPath();
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + f.synapticGlow * 0.7 + f.memoryTrace * 0.1})`;
+        ctx.fillStyle = `rgba(0, 255, 255, ${0.15 + f.synapticGlow * 0.6 + f.memoryTrace * 0.1})`;
         ctx.arc(nx, ny, 8 + (f.synapticGlow * 20) + (memBoost * 2), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'secondary') {
         // Medium node
         ctx.globalAlpha = contrastMasterOpacity * Math.min(1.0, 0.7 + f.synapticGlow + f.memoryTrace);
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillStyle = 'rgba(200, 255, 255, 0.8)';
         ctx.arc(nx, ny, 1.2 + (f.synapticGlow * 1.5) + (f.memoryTrace * 0.8), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'tertiary') {
         // Tiny dust node
         ctx.globalAlpha = contrastMasterOpacity * 0.4;
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillStyle = f.isDeepRed ? 'rgba(150, 10, 10, 0.5)' : 'rgba(255, 255, 255, 0.5)';
         ctx.arc(nx, ny, 0.6, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    
+    // DRAW ORGANIC MEMBRANE WEBBING (Phase D: The Anomaly)
+    // Connects primary/secondary fibers organically to look like wet tissue
+    if (this._unravelProgress > 0) {
+       ctx.globalAlpha = contrastMasterOpacity * 0.02; // EXTREMELY subtle, doesn't ruin readability
+       ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+       for (let i = 0; i < this._numFibers - 1; i++) {
+           const f1 = this._fibers[i];
+           const f2 = this._fibers[i+1];
+           
+           if ((f1.hierarchyLevel === 'primary' || f1.hierarchyLevel === 'secondary') && 
+               (f2.hierarchyLevel === 'primary' || f2.hierarchyLevel === 'secondary')) {
+               
+               ctx.beginPath();
+               ctx.moveTo(f1.currStartX, f1.currStartY);
+               ctx.quadraticCurveTo(f1.currCpX, f1.currCpY, f1.currEndX, f1.currEndY);
+               ctx.lineTo(f2.currEndX, f2.currEndY);
+               ctx.quadraticCurveTo(f2.currCpX, f2.currCpY, f2.currStartX, f2.currStartY);
+               ctx.closePath();
+               ctx.fill();
+           }
+       }
     }
     
     // Render Signal Propagation (Thoughts/Information)
@@ -669,45 +719,72 @@ export class FiberSystem {
         }
     }
     
-    // The Core Focal Point (The Brain / Eye)
+    // THE BIG JUMP: The Alien Fleshy Sac (Core Anatomy)
     ctx.globalAlpha = masterOpacity;
     
-    // Arrival Pulse: Core slightly brightens when information is received
-    const arrivalBright = this._brainArrivalPulse * 0.3;
+    // Arrival Pulse: Core slightly brightens and expands when information is received
+    const arrivalBright = this._brainArrivalPulse * 0.5;
     
-    // Outer Sclera
+    // Organic metabolic breath for the core size
+    const renderTime = performance.now() * 0.001;
+    const coreBreath = Math.sin(renderTime * 2.0) * 2.5 + Math.cos(renderTime * 1.3) * 1.5;
+    const coreRadius = 32 + coreBreath + (this._brainArrivalPulse * 12.0); // Much larger body
+    
+    // 1. The Outer Translucent Membrane (Fleshy Sac)
     ctx.beginPath();
-    ctx.fillStyle = `rgba(255, 255, 255, ${1.0 + arrivalBright})`;
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-    ctx.shadowBlur = 15 + (this._brainArrivalPulse * 15);
-    ctx.arc(this._brainX, this._brainY, 6 + (this._brainArrivalPulse * 1.5), 0, Math.PI * 2);
+    // Deep cyan/blue outer sac, heavily transparent
+    ctx.fillStyle = `rgba(10, 25, 35, ${0.7 + arrivalBright})`;
+    ctx.strokeStyle = `rgba(0, 200, 255, ${0.4 + arrivalBright})`;
+    ctx.lineWidth = 2.0;
+    ctx.shadowColor = 'rgba(0, 200, 255, 0.6)';
+    ctx.shadowBlur = 30 + (this._brainArrivalPulse * 20);
+    
+    // Draw an imperfect, undulating circular membrane
+    for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.2) {
+       const noise = Math.sin(a * 4 + renderTime * 3) * 4.0 + Math.cos(a * 7 - renderTime * 2) * 2.0;
+       const rx = this._brainX + Math.cos(a) * (coreRadius + noise);
+       const ry = this._brainY + Math.sin(a) * (coreRadius + noise);
+       if (a === 0) ctx.moveTo(rx, ry);
+       else ctx.lineTo(rx, ry);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // 2. The Inner Embryo / Yolk (Tracks Cursor heavily)
+    const bdx = this._cursorX - this._brainX;
+    const bdy = this._cursorY - this._brainY;
+    const bDist = Math.sqrt(bdx * bdx + bdy * bdy);
+    const maxEmbryoShift = coreRadius * 0.45; // Moves around inside the sac
+    const px = bDist > 0 ? (bdx / bDist) * maxEmbryoShift : 0;
+    const py = bDist > 0 ? (bdy / bDist) * maxEmbryoShift : 0;
+    
+    ctx.beginPath();
+    // Brilliant hot cyan for the sentient embryo
+    ctx.fillStyle = `rgba(0, 255, 255, ${0.9 + arrivalBright})`;
+    ctx.shadowBlur = 20;
+    ctx.arc(this._brainX + px, this._brainY + py, 10 + (this._brainArrivalPulse * 5.0), 0, Math.PI * 2);
     ctx.fill();
     
-    // Render an inner "pupil" that clearly orients towards the cursor
-    if (this._unravelProgress > 0) {
-       const bdx = this._cursorX - this._brainX;
-       const bdy = this._cursorY - this._brainY;
-       const bDist = Math.sqrt(bdx * bdx + bdy * bdy);
-       const maxPupilShift = 3.5; // Extends to the edge of the sclera
-       const px = bDist > 0 ? (bdx / bDist) * maxPupilShift : 0;
-       const py = bDist > 0 ? (bdy / bDist) * maxPupilShift : 0;
+    // 3. Dense Inner Capillary Network (Veins connecting embryo to sac walls)
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.3)`;
+    ctx.lineWidth = 1.0;
+    ctx.shadowBlur = 0;
+    for (let a = 0; a < Math.PI * 2; a += 0.6) {
+       const startVeinX = this._brainX + px + Math.cos(a) * 10;
+       const startVeinY = this._brainY + py + Math.sin(a) * 10;
+       const endVeinX = this._brainX + Math.cos(a + 0.4) * coreRadius;
+       const endVeinY = this._brainY + Math.sin(a + 0.4) * coreRadius;
        
-       // Arrival Pulse: Micro contraction of the pupil
-       const pupilContraction = this._brainArrivalPulse * 1.0;
-       
-       // Dark Iris
-       ctx.beginPath();
-       ctx.fillStyle = 'rgba(15, 15, 15, 1.0)';
-       ctx.shadowBlur = 0;
-       ctx.arc(this._brainX + px, this._brainY + py, Math.max(1.5, 3.5 - pupilContraction), 0, Math.PI * 2);
-       ctx.fill();
-       
-       // Center Pupil Light (Reflection)
-       ctx.beginPath();
-       ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-       ctx.arc(this._brainX + px + (px * 0.15), this._brainY + py + (py * 0.15), 1.2, 0, Math.PI * 2);
-       ctx.fill();
+       ctx.moveTo(startVeinX, startVeinY);
+       ctx.quadraticCurveTo(
+           this._brainX + Math.cos(a - 0.5) * coreRadius * 0.5,
+           this._brainY + Math.sin(a - 0.5) * coreRadius * 0.5,
+           endVeinX, endVeinY
+       );
     }
+    ctx.stroke();
     
     ctx.restore();
   }
