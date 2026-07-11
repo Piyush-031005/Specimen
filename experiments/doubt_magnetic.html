@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Doubt: Magnetic Repulsion</title>
+  <style>
+    body { margin: 0; background: #040404; overflow: hidden; cursor: none; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    let w, h, cx, cy;
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      cx = w/2; cy = h/2;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let mx = cx, my = cy;
+    window.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+    function drawCursor(x, y) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 15, y + 15);
+      ctx.lineTo(x + 6, y + 15);
+      ctx.lineTo(x, y + 22);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, w, h);
+
+      let renderX = mx;
+      let renderY = my;
+
+      // The Anomaly: A 20px radius around the exact center of the screen
+      // that magnetically repels the cursor by exactly 4 pixels.
+      const dx = cx - mx;
+      const dy = cy - my;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 0 && dist < 20) {
+        // Push cursor away from center by 4 pixels
+        renderX -= (dx / dist) * 4;
+        renderY -= (dy / dist) * 4;
+      }
+
+      // Optional: Draw a tiny visual center point so they have something to aim at
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(cx, cy, 1, 1);
+
+      drawCursor(renderX, renderY);
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

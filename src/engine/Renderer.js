@@ -115,6 +115,32 @@ export class Renderer {
     EventBus.on('WORLD_PHYSICS_UPDATED', ({ certainty }) => {
       this._worldCertainty = certainty;
     });
+    
+    // EVOLUTION EFFECTS
+    this._shakeTime = 0;
+    this._evolutionLevel = 1;
+    this._stars = [];
+    
+    EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
+        this._evolutionLevel = level;
+        this._shakeTime = 0.5;
+        if (level === 3) this._generateStars(); // Apex predator reaches cosmic scale
+    });
+    
+    EventBus.on('ORGANISM_APEX_FEEDING', () => {
+        this._shakeTime = 0.3; // Shake every time it feeds at max level
+    });
+  }
+
+  _generateStars() {
+      for (let i = 0; i < 200; i++) {
+          this._stars.push({
+              x: Math.random() * window.innerWidth,
+              y: Math.random() * window.innerHeight,
+              z: Math.random() * 2 + 0.1, // depth
+              alpha: Math.random() * 0.5 + 0.1
+          });
+      }
   }
 
   /**
@@ -209,6 +235,34 @@ export class Renderer {
       this._ctx.fillStyle = '#050505'; // Fallback slightly above 0
     }
     this._ctx.fillRect(0, 0, this._tickData.cssWidth, this._tickData.cssHeight);
+    
+    // Screen Shake Effect
+    if (this._shakeTime > 0) {
+        this._shakeTime -= deltaMs * 0.001;
+        const intensity = (this._shakeTime / 0.5) * 15; // Max 15px shake
+        const rx = (Math.random() - 0.5) * intensity;
+        const ry = (Math.random() - 0.5) * intensity;
+        this._canvas.style.transform = `translate(${rx}px, ${ry}px)`;
+        if (this._shakeTime <= 0) {
+            this._canvas.style.transform = `translate(0px, 0px)`;
+        }
+    }
+    
+    // Cosmic Scale Background (Level 3)
+    if (this._evolutionLevel === 3 && this._stars) {
+        this._ctx.fillStyle = '#ffffff';
+        const t = now * 0.0005;
+        for (let i = 0; i < this._stars.length; i++) {
+            const s = this._stars[i];
+            const px = (s.x - (this._mouseX - cx) * 0.1 / s.z); // Mouse parallax
+            const py = (s.y - (this._mouseY - cy) * 0.1 / s.z);
+            // Twinkle
+            const alpha = s.alpha * (0.5 + Math.sin(t + i) * 0.5);
+            this._ctx.globalAlpha = alpha;
+            this._ctx.fillRect(px, py, 1.5, 1.5);
+        }
+        this._ctx.globalAlpha = 1.0;
+    }
 
     // ── Darkness Modes (A, B, C) ──────────────────────────────────────────────
     if (REALITY_LAWS.DARKNESS_MODE === 'B' || REALITY_LAWS.DARKNESS_MODE === 'C') {

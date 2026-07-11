@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Doubt: The Observer</title>
+  <style>
+    body { margin: 0; background: #040404; overflow: hidden; cursor: crosshair; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let mx = w/2, my = h/2;
+    let lastMx = mx, lastMy = my;
+    let stillTimer = 0;
+    
+    window.addEventListener('mousemove', e => { 
+      mx = e.clientX; 
+      my = e.clientY; 
+    });
+
+    let lastFrame = performance.now();
+    let hasObserved = false; // Only happens once per session
+
+    // Determine opposite quadrant for the observer pixel
+    function getOppositeQuadrantPoint() {
+      const qx = mx < w/2 ? w * 0.75 + Math.random() * (w*0.2) : w * 0.1 + Math.random() * (w*0.2);
+      const qy = my < h/2 ? h * 0.75 + Math.random() * (h*0.2) : h * 0.1 + Math.random() * (h*0.2);
+      return { x: qx, y: qy };
+    }
+
+    let observerPoint = null;
+
+    function loop(now) {
+      const dt = (now - lastFrame) / 1000;
+      lastFrame = now;
+
+      const dist = Math.hypot(mx - lastMx, my - lastMy);
+      if (dist === 0) {
+        stillTimer += dt;
+      } else {
+        stillTimer = 0;
+        if (observerPoint) {
+          // The moment they move to check it, it vanishes forever
+          observerPoint = null;
+        }
+      }
+      lastMx = mx; lastMy = my;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // The Anomaly: If perfectly still for 5 seconds, a single pixel appears
+      // in the opposite corner. If they move to look at it, it disappears forever.
+      if (stillTimer > 5.0 && !hasObserved) {
+        if (!observerPoint) {
+          observerPoint = getOppositeQuadrantPoint();
+          hasObserved = true; // Never again
+        }
+      }
+
+      if (observerPoint) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Barely perceptible
+        ctx.fillRect(Math.floor(observerPoint.x), Math.floor(observerPoint.y), 1.5, 1.5);
+      }
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

@@ -58,7 +58,10 @@ export class Entity {
       pluckPhase:     'idle', // idle -> tension -> freeze -> exploded
       standoffIntensity: 0,
       standoffContext: null,
-      isGrappling:    false
+      isGrappling:    false,
+      pursuitX:       0,
+      pursuitY:       0,
+      evolutionLevel: 1
     };
 
     /** @type {number} Current world stage (0-5) */
@@ -152,6 +155,9 @@ export class Entity {
       this._state.pluckPhase = 'idle';
       this._fiberSystem.resetUnravel();
     });
+    
+    // Add eat delay to prevent multiple triggers in one frame
+    this._eatCooldown = 0;
 
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
       this._onTick(tickData);
@@ -200,14 +206,38 @@ export class Entity {
 
     // Cursor lean: in Curious state, entity drifts slightly toward cursor
     this._updateCursorLean(deltaSeconds);
+    
+    // THE APEX PREDATOR: Pursuit Logic
+    // Organism actively hunts the cursor
+    if (this._eatCooldown > 0) {
+       this._eatCooldown -= deltaSeconds;
+    } else {
+       const pdx = this._cursorWorld.wx - this._state.pursuitX;
+       const pdy = this._cursorWorld.wy - this._state.pursuitY;
+       const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
+       
+       if (pDist > 0.05) {
+           // Speed increases with evolution level
+           const speed = this._state.evolutionLevel === 1 ? 0.3 : (this._state.evolutionLevel === 2 ? 0.6 : 1.2);
+           this._state.pursuitX += (pdx / pDist) * speed * deltaSeconds;
+           this._state.pursuitY += (pdy / pDist) * speed * deltaSeconds;
+       }
+       
+       // Collision Detection (EATEN)
+       // Core size scales with evolution level, so collision radius increases
+       const hitRadius = this._state.evolutionLevel === 1 ? 0.15 : (this._state.evolutionLevel === 2 ? 0.3 : 0.6);
+       if (pDist < hitRadius && this._state.masterOpacity > 0.8) {
+           this._eatCursor();
+       }
+    }
 
-    // Convert world position to screen, incorporating the cinematic reveal offset
-    const worldX = this._state.driftX + this._cursorLean.wx + this._cinematicOffsetX;
-    const worldY = this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
+    // Convert world position to screen, incorporating the cinematic reveal offset and pursuit offset
+    const worldX = this._state.pursuitX + this._state.driftX + this._cursorLean.wx + this._cinematicOffsetX;
+    const worldY = this._state.pursuitY + this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
     const screen = this._coords.worldToScreen(worldX, worldY);
 
     // Also get the target control point for fibers in screen space
-    const targetWorldCpX = this._cursorWorld.wx + this._state.driftX;
+    const targetWorldCpX = this._cursorWorld.wx + this._state.driftX; // fibers reach slightly past the body drift
     const targetWorldCpY = this._cursorWorld.wy + this._state.driftY;
     const targetScreenCp = this._coords.worldToScreen(targetWorldCpX, targetWorldCpY);
 
@@ -258,6 +288,24 @@ export class Entity {
     if (offsetX !== 0 || offsetY !== 0) {
       ctx.restore();
     }
+  }
+  
+  /**
+   * The organism catches the cursor.
+   * Triggers evolution, massive glitch effects, and UI alerts.
+   */
+  _eatCursor() {
+      this._eatCooldown = 2.0; // Wait 2 seconds before it can eat again
+      
+      if (this._state.evolutionLevel < 3) {
+          this._state.evolutionLevel++;
+          EventBus.emit('ORGANISM_EVOLVED', { level: this._state.evolutionLevel });
+      } else {
+          EventBus.emit('ORGANISM_APEX_FEEDING', {}); // Just feed and shake screen if maxed out
+      }
+      
+      // Tell FiberSystem to mutate and grow
+      this._fiberSystem.triggerMutation(this._state.evolutionLevel);
   }
 
   /**

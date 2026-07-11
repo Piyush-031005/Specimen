@@ -17,6 +17,18 @@ export class HUDSystem {
         this.addLog("SYSTEM INITIALIZED.");
         this.addLog("SUBJECT: SPECIMEN-01 AWAITING OBSERVATION.");
         
+        // Add Mutation Level UI
+        const topR = document.querySelector('.hud-top-right');
+        if (topR) {
+            this._mutEl = document.createElement('div');
+            this._mutEl.id = 'hud-mut';
+            this._mutEl.textContent = 'MUTATION LEVEL: I';
+            this._mutEl.style.color = '#00ffff';
+            this._mutEl.style.fontWeight = 'bold';
+            this._mutEl.style.marginTop = '10px';
+            topR.appendChild(this._mutEl);
+        }
+        
         EventBus.on(EVENTS.USER_INPUT, ({ x, y, type }) => {
             if (!this._hud) return;
             this._coordsEl.textContent = `POS: [${Math.floor(x)}, ${Math.floor(y)}]`;
@@ -48,6 +60,27 @@ export class HUDSystem {
             setTimeout(() => {
                 if (this._bioEl) this._bioEl.style.opacity = '0.5';
             }, 200);
+        });
+        
+        // EVOLUTION LOGIC
+        EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
+            if (!this._hud) return;
+            this.addLog(`CRITICAL ABERRATION: SUBJECT HAS GROWN TO LEVEL ${level}`);
+            
+            if (this._mutEl) {
+                this._mutEl.textContent = `MUTATION LEVEL: ${level === 2 ? 'II' : 'III (APEX)'}`;
+                this._mutEl.style.color = level === 2 ? '#ffb400' : '#c80032';
+            }
+            
+            this._hud.classList.add('danger');
+            setTimeout(() => this._hud.classList.remove('danger'), 500);
+        });
+        
+        EventBus.on('ORGANISM_APEX_FEEDING', () => {
+            if (!this._hud) return;
+            this.addLog("CRITICAL: APEX PREDATOR IS FEEDING. REALITY TEARING.");
+            this._hud.classList.add('danger');
+            setTimeout(() => this._hud.classList.remove('danger'), 200);
         });
     }
     

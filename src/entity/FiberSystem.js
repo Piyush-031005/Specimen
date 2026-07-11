@@ -31,12 +31,27 @@ export class FiberSystem {
     this._glowCursorY = coords.center.y;
     
     // Signal Propagation
-    this._signals = [];
-    
-    // Arrival Pulse (Brain receives a signal)
-    this._brainArrivalPulse = 0;
-    
+    this._isGrappling = false;
+    this._evolutionLevel = 1;
+
+    // We build the fibers around a generic center first
+    // They will be translated during rendering to follow the brain
     this._generateFibers();
+  }
+
+  /**
+   * Triggers a violent mutation, regenerating the fibers to make the organism larger.
+   * @param {number} level 
+   */
+  triggerMutation(level) {
+      this._evolutionLevel = level;
+      
+      // Explosion effect - instantly reset unravel
+      this._unravelProgress = 0;
+      this._recoilOvershoot = 1.0;
+      
+      // Regenerate the anatomy
+      this._generateFibers();
   }
 
   rebuildCache() {
@@ -46,69 +61,65 @@ export class FiberSystem {
 
   _generateFibers() {
     this._fibers = [];
-    const w = this._coords.cssWidth;
-    const h = this._coords.cssHeight;
+    
+    // Scale fiber count based on evolution
+    let primaryCount = 4;
+    let secondaryCount = 8;
+    let ambientCount = 10;
+    
+    if (this._evolutionLevel === 2) {
+        primaryCount = 8;
+        secondaryCount = 16;
+        ambientCount = 20;
+    } else if (this._evolutionLevel === 3) {
+        primaryCount = 12;
+        secondaryCount = 30;
+        ambientCount = 40;
+    }
+    
+    this._numFibers = primaryCount + secondaryCount + ambientCount;
+
     const cx = this._coords.center.x;
     const cy = this._coords.center.y;
+    // Core scales massively at Level 3
+    const baseW = this._coords.cssWidth * (this._evolutionLevel === 3 ? 0.6 : (this._evolutionLevel === 2 ? 0.4 : 0.25));
+    const baseH = this._coords.cssHeight * (this._evolutionLevel === 3 ? 0.6 : (this._evolutionLevel === 2 ? 0.4 : 0.25));
     
-    // We reduce the number of fibers to clean up noise and emphasize anatomy
-    this._numFibers = 120; 
-
-    for (let i = 0; i < this._numFibers; i++) {
-      // Visual Hierarchy: 4 distinct anatomical classes
-      // 1. Primary (Emergent Heroes) - Longest, thickest, very few (the main limbs)
-      // 2. Secondary - Medium length, supporting structure
-      // 3. Tertiary - Short, dense, fills out the core
-      // 4. Background tissue - Tiny, faint, immediate brain surroundings
-
-      const hierarchyRoll = Math.random();
-      let hierarchyLevel;
+    // Helper to add a fiber
+    const addFiber = (isEmergentHero, hierarchyLevel) => {
       let radiusMod;
       let baseOpacity;
       let lineWidth;
       
-      if (hierarchyRoll < 0.08) {
-        hierarchyLevel = 'primary';
+      if (hierarchyLevel === 'primary') {
         radiusMod = 1.3;
         baseOpacity = randomFloat(0.1, 0.2);
         lineWidth = randomFloat(0.8, 1.2);
-      } else if (hierarchyRoll < 0.3) {
-        hierarchyLevel = 'secondary';
+      } else if (hierarchyLevel === 'secondary') {
         radiusMod = 0.8;
         baseOpacity = randomFloat(0.05, 0.1);
         lineWidth = randomFloat(0.4, 0.6);
-      } else if (hierarchyRoll < 0.8) {
-        hierarchyLevel = 'tertiary';
+      } else {
         radiusMod = 0.4;
         baseOpacity = randomFloat(0.02, 0.05);
         lineWidth = randomFloat(0.2, 0.3);
-      } else {
-        hierarchyLevel = 'tissue';
-        radiusMod = 0.15;
-        baseOpacity = randomFloat(0.01, 0.02);
-        lineWidth = randomFloat(0.1, 0.2);
       }
       
-      const isEmergentHero = hierarchyLevel === 'primary';
-
       // Organic radial distribution (bias horizontally to feel like an eye/brain rather than a perfect circle)
       const angle = randomFloat(0, Math.PI * 2);
       
-      // Asymmetry: Add natural variation to the reach
-      const reachVariance = randomFloat(0.7, 1.3);
-      const spreadX = Math.cos(angle) * (w * 0.35 * radiusMod * reachVariance);
-      const spreadY = Math.sin(angle) * (h * 0.25 * radiusMod * reachVariance);
+      // Reach radius scales with evolution
+      const reachMod = this._evolutionLevel === 3 ? 2.5 : (this._evolutionLevel === 2 ? 1.5 : 1.0);
+      const reach = isEmergentHero ? 1.2 : randomFloat(0.4, 1.0);
       
-      // Every fiber originates exactly at the Brain (with a microscopic offset for organic roots)
       const startX = cx + Math.cos(angle) * 3;
       const startY = cy + Math.sin(angle) * 3;
       
       // Fibers reach outward to the periphery
-      const endX = cx + spreadX;
-      const endY = cy + spreadY;
+      const endX = cx + Math.cos(angle) * (baseW * reach * reachMod);
+      const endY = cy + Math.sin(angle) * (baseH * reach * reachMod);
       
       // The control point gives the curve its biological sweep. 
-      // It bows outwards from the straight line between start and end.
       const midX = (startX + endX) / 2;
       const midY = (startY + endY) / 2;
       const normalX = -Math.sin(angle);
@@ -116,14 +127,14 @@ export class FiberSystem {
       
       // Primary branches bow less (more direct), tissue bows wildly (more tangled)
       const bowMultiplier = hierarchyLevel === 'primary' ? 0.3 : 0.8;
-      const bowMagnitude = randomFloat(-w * 0.1, w * 0.1) * radiusMod * bowMultiplier;
+      const bowMagnitude = randomFloat(-baseW * 0.1, baseW * 0.1) * radiusMod * bowMultiplier;
       
       // We store the offset relative to cx, cy for the update physics engine
       const absoluteCpX = midX + normalX * bowMagnitude;
       const absoluteCpY = midY + normalY * bowMagnitude;
       
       // Calculate angular sorting for membrane generation
-      const renderAngle = Math.atan2(spreadY, spreadX);
+      const renderAngle = Math.atan2(endY - cy, endX - cx);
 
       this._fibers.push({
         tStartX: startX,
@@ -137,7 +148,7 @@ export class FiberSystem {
         lineWidth,
         baseOpacity,
         z: randomFloat(-1.0, 1.0), // Z-depth for parallax
-        isDeepRed: randomFloat(0, 1) < 0.08, // Rare deep background branches
+        isDeepRed: randomFloat(0, 1) < (this._evolutionLevel === 3 ? 0.25 : 0.08), // More deep red veins in Level 3
         
         // We store the offset relative to cx, cy for the update physics engine
         cpOffsetX: absoluteCpX - cx,
@@ -146,7 +157,7 @@ export class FiberSystem {
         phase: randomFloat(0, Math.PI * 2),
         speed: randomFloat(0.5, 2.0),
         
-        // Current animated values
+        // Dynamic state
         currStartX: cx,
         currStartY: cy,
         currEndX: cx,
@@ -154,11 +165,8 @@ export class FiberSystem {
         currCpX: cx,
         currCpY: cy,
         
+        memoryTrace: 0,
         synapticGlow: 0,
-        lastSignalTime: 0,
-        memoryTrace: 0, // Permanent biological memory of interaction
-        
-        // Environmental echo state
         phantomTwitchTimer: 0,
         phantomTwitchX: 0
       });
@@ -609,20 +617,38 @@ export class FiberSystem {
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
       
-      // Bioluminescence, Deep Red Background, and Grappling Warning
+      // Bioluminescence, Deep Red Background, and Evolution/Grappling Warning
       let r = 255, g = 255, b = 255;
       
+      if (this._evolutionLevel === 3) {
+         // Level 3 Apex Predator: Deep Crimson & Black
+         r = 200; g = 0; b = 30;
+         if (f.synapticGlow > 0.1) {
+            r = 255; g = 50; b = 50; // Hot red glow
+         }
+      } else if (this._evolutionLevel === 2) {
+         // Level 2: Gold/Orange
+         r = 255; g = 180; b = 50;
+         if (f.synapticGlow > 0.1) {
+            r = 255; g = 220; b = 100; // Hot gold glow
+         }
+      } else {
+         // Level 1: Cyan
+         if (f.synapticGlow > 0.1) {
+            r = Math.floor(255 - (f.synapticGlow * 200));
+            g = 255;
+            b = 255;
+         }
+      }
+      
+      // Grappling overrides color to pure aggression
       if (this._isGrappling) {
-         r = 255; g = 80; b = 0; // Aggressive Blood Orange / Gold warning color
+         r = 255; g = 40; b = 0; // Aggressive Blood Orange / Red warning color
          ctx.globalAlpha = Math.min(1.0, opacity * 1.5);
       } else if (f.isDeepRed) {
          r = 150; g = 10; b = 10; // Deep fleshy red for the background
          ctx.globalAlpha = opacity * 0.7; // Push it further back
-      } else if (f.synapticGlow > 0.1) {
-         r = Math.floor(255 - (f.synapticGlow * 200)); // Becomes Deep Cyan/Aqua
-         g = 255;
-         b = 255;
-      } else if (f.memoryTrace > 0.01) {
+      } else if (f.memoryTrace > 0.01 && this._evolutionLevel === 1) {
          b = Math.floor(255 - (f.memoryTrace * 50)); // Gold for memory
       }
       
@@ -750,11 +776,19 @@ export class FiberSystem {
     // 1. The Outer Translucent Membrane (Fleshy Sac)
     ctx.beginPath();
     
-    // Shift sac color to blood orange when grappling
+    // Shift sac color based on Evolution and Grappling
     if (this._isGrappling) {
        ctx.fillStyle = `rgba(40, 10, 0, ${0.7 + arrivalBright})`;
        ctx.strokeStyle = `rgba(255, 80, 0, ${0.8 + arrivalBright})`;
        ctx.shadowColor = 'rgba(255, 100, 0, 0.8)';
+    } else if (this._evolutionLevel === 3) {
+       ctx.fillStyle = `rgba(40, 0, 10, ${0.8 + arrivalBright})`; // Deep crimson sac
+       ctx.strokeStyle = `rgba(200, 0, 50, ${0.5 + arrivalBright})`;
+       ctx.shadowColor = 'rgba(200, 0, 50, 0.6)';
+    } else if (this._evolutionLevel === 2) {
+       ctx.fillStyle = `rgba(35, 25, 0, ${0.7 + arrivalBright})`; // Gold sac
+       ctx.strokeStyle = `rgba(255, 180, 0, ${0.5 + arrivalBright})`;
+       ctx.shadowColor = 'rgba(255, 180, 0, 0.6)';
     } else {
        ctx.fillStyle = `rgba(10, 25, 35, ${0.7 + arrivalBright})`;
        ctx.strokeStyle = `rgba(0, 200, 255, ${0.4 + arrivalBright})`;
@@ -785,16 +819,23 @@ export class FiberSystem {
     const py = bDist > 0 ? (bdy / bDist) * maxEmbryoShift : 0;
     
     ctx.beginPath();
-    // Shift embryo to intense gold/white when grappling
+    // Shift embryo color based on evolution & grapple
     if (this._isGrappling) {
+       ctx.fillStyle = `rgba(255, 150, 0, ${0.9 + arrivalBright})`;
+       ctx.shadowColor = `rgba(255, 100, 0, 1.0)`;
+    } else if (this._evolutionLevel === 3) {
+       ctx.fillStyle = `rgba(255, 50, 50, ${0.9 + arrivalBright})`;
+       ctx.shadowColor = `rgba(255, 0, 0, 1.0)`;
+    } else if (this._evolutionLevel === 2) {
        ctx.fillStyle = `rgba(255, 200, 100, ${0.9 + arrivalBright})`;
-       ctx.shadowColor = `rgba(255, 150, 0, 1.0)`;
+       ctx.shadowColor = `rgba(255, 180, 0, 1.0)`;
     } else {
        ctx.fillStyle = `rgba(0, 255, 255, ${0.9 + arrivalBright})`;
+       ctx.shadowColor = 'rgba(0, 200, 255, 1.0)';
     }
     
     ctx.shadowBlur = 20;
-    ctx.arc(this._brainX + px, this._brainY + py, 10 + (this._brainArrivalPulse * 5.0), 0, Math.PI * 2);
+    ctx.arc(this._brainX + px, this._brainY + py, 10 + (this._brainArrivalPulse * 5.0) + (this._evolutionLevel * 2), 0, Math.PI * 2);
     ctx.fill();
     
     // 3. Dense Inner Capillary Network (Veins connecting embryo to sac walls)

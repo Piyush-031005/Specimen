@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Doubt: Posthumous Twitch</title>
+  <style>
+    body { margin: 0; background: #040404; overflow: hidden; cursor: none; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let mx = w/2, my = h/2;
+    let lastMx = mx, lastMy = my;
+    let stillTimer = 0;
+    
+    window.addEventListener('mousemove', e => { 
+      mx = e.clientX; 
+      my = e.clientY; 
+    });
+
+    function drawCursor(x, y) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 15, y + 15);
+      ctx.lineTo(x + 6, y + 15);
+      ctx.lineTo(x, y + 22);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    let lastFrame = performance.now();
+    let hasTwitched = false;
+
+    function loop(now) {
+      const dt = (now - lastFrame) / 1000;
+      lastFrame = now;
+
+      const dist = Math.hypot(mx - lastMx, my - lastMy);
+      if (dist === 0) {
+        stillTimer += dt;
+      } else {
+        stillTimer = 0;
+        hasTwitched = false; // Reset if they move
+      }
+      lastMx = mx; lastMy = my;
+
+      ctx.clearRect(0, 0, w, h);
+
+      let renderX = mx;
+      let renderY = my;
+
+      // The Anomaly: If perfectly still for 4 seconds, shift by exactly 0.8 subpixels.
+      // Canvas anti-aliasing will make this look like a microscopic blur or hallucination.
+      if (stillTimer > 4.0 && !hasTwitched) {
+        renderX += 0.8;
+        // We hold it there, but they will immediately move the mouse to check, resetting it.
+      }
+
+      drawCursor(renderX, renderY);
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
