@@ -26,6 +26,13 @@ export class FiberSystem {
     this._cursorX = coords.center.x;
     this._cursorY = coords.center.y;
     
+    // Delayed cursor for synapse glow (Eye reacts first, then network)
+    this._glowCursorX = coords.center.x;
+    this._glowCursorY = coords.center.y;
+    
+    // Signal Propagation
+    this._signals = [];
+    
     this._generateFibers();
   }
 
@@ -138,6 +145,7 @@ export class FiberSystem {
         currCpY: cy,
         
         synapticGlow: 0,
+        lastSignalTime: 0,
         
         // Environmental echo state
         phantomTwitchTimer: 0,
@@ -185,6 +193,10 @@ export class FiberSystem {
     // Track cursor for render
     this._cursorX = targetCpX;
     this._cursorY = targetCpY;
+    
+    // Delayed cursor for network reaction (Eye reacts instantly, network lags ~100ms)
+    this._glowCursorX = expDecay(this._glowCursorX, targetCpX, 10.0, deltaSeconds);
+    this._glowCursorY = expDecay(this._glowCursorY, targetCpY, 10.0, deltaSeconds);
     
     // Determine target progress
     let targetProgress = isUnraveled ? 1.0 : 0.0;
@@ -324,12 +336,11 @@ export class FiberSystem {
       f.currEndX = targetEndX + (this._unravelProgress === 0 ? globalVibrationX : 0);
       f.currEndY = targetEndY;
       
-      // Synaptic Glow (Notice Effect)
-      // When the cursor is near a peripheral synapse, it lights up
+      // Synaptic Glow (Notice Effect) - Using delayed cursor so Eye moves first
       let targetGlow = 0;
       if (isUnraveled && !isCursorStill) {
-         const dxSyn = f.currEndX - targetCpX;
-         const dySyn = f.currEndY - targetCpY;
+         const dxSyn = f.currEndX - this._glowCursorX;
+         const dySyn = f.currEndY - this._glowCursorY;
          const distSyn = Math.sqrt(dxSyn * dxSyn + dySyn * dySyn);
          const glowRadius = 350; // Increased radius for confident perception
          if (distSyn < glowRadius) {
@@ -340,6 +351,32 @@ export class FiberSystem {
       // Lingering recovery: Fast to light up (attention), slow to fade (linger)
       const decaySpeed = (targetGlow > f.synapticGlow) ? 25.0 : 2.0; // 2.0 creates a ~0.5s linger
       f.synapticGlow = expDecay(f.synapticGlow, targetGlow, decaySpeed, deltaSeconds);
+      
+      // Signal Propagation: Sensation travels from noticed synapse TO brain
+      const time = performance.now() * 0.001;
+      if (f.synapticGlow > 0.5 && f.isEmergentHero && isUnraveled) {
+         if (time - f.lastSignalTime > 2.0) { // Max one signal every 2s per fiber
+            f.lastSignalTime = time;
+            this._signals.push({
+               fiberIndex: i,
+               progress: 1.0, // Start at synapse
+               direction: -1, // Travel towards brain
+               speed: randomFloat(0.4, 0.7), // Calm, purposeful pace
+               intensity: 1.0
+            });
+         }
+      }
+      
+      // Idle Thoughts: Brain occasionally sends signals outward to keep network alive
+      if (isUnraveled && Math.random() < 0.05 * deltaSeconds) {
+          this._signals.push({
+             fiberIndex: i,
+             progress: 0.0, // Start at brain
+             direction: 1,  // Travel outwards
+             speed: randomFloat(0.3, 0.5), // Slower idle pace
+             intensity: 0.5
+          });
+      }
       
       // Intrusive Cursor: The user is trespassing. Fibers bend OUT OF THE WAY to accommodate the intrusion.
       // We calculate distance from the unraveled control point to the cursor.
@@ -404,6 +441,17 @@ export class FiberSystem {
       
       f.currCpX = expDecay(f.currCpX, targetCurrentCpX, responseSpeed, deltaSeconds);
       f.currCpY = expDecay(f.currCpY, targetCurrentCpY, responseSpeed, deltaSeconds);
+    }
+    
+    // Update Signals
+    for (let i = this._signals.length - 1; i >= 0; i--) {
+      const s = this._signals[i];
+      s.progress += s.speed * s.direction * deltaSeconds;
+      
+      // Remove if arrived at destination
+      if (s.progress < 0 || s.progress > 1) {
+         this._signals.splice(i, 1);
+      }
     }
   }
 
@@ -538,6 +586,40 @@ export class FiberSystem {
         ctx.arc(nx, ny, 0.6, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    
+    // Render Signal Propagation (Thoughts/Information)
+    for (let i = 0; i < this._signals.length; i++) {
+        const s = this._signals[i];
+        const f = this._fibers[s.fiberIndex];
+        if (!f) continue;
+        
+        // Draw a soft, multi-segment pulse (like fluid moving through a vein)
+        for (let k = 0; k < 6; k++) {
+            // Trail behind the current progress
+            const offset = (k * 0.02) * -s.direction; 
+            const t = Math.max(0, Math.min(1, s.progress + offset));
+            
+            const omt = 1 - t;
+            const px = omt * omt * f.currStartX + 2 * omt * t * f.currCpX + t * t * f.currEndX;
+            const py = omt * omt * f.currStartY + 2 * omt * t * f.currCpX + t * t * f.currEndY;
+            
+            const alpha = s.intensity * masterOpacity * (1 - k / 6);
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            
+            // Only the head of the pulse glows
+            if (k === 0) {
+               ctx.shadowBlur = 8;
+               ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            } else {
+               ctx.shadowBlur = 0;
+            }
+            
+            const baseSize = f.isEmergentHero ? 1.5 : 1.0;
+            ctx.arc(px, py, baseSize * (2.0 - k * 0.2), 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
     
     // The Core Focal Point (The Brain / Eye)
