@@ -102,7 +102,14 @@ function handleUserGesture(event) {
 
 window.addEventListener('pointerdown', handleUserGesture, { passive: true });
 window.addEventListener('pointermove', handleUserGesture, { passive: true });
+window.addEventListener('pointerup', handleUserGesture, { passive: true });
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    handleUserGesture(e);
+  }
+}, { passive: false });
+window.addEventListener('keyup', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
     handleUserGesture(e);

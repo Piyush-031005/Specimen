@@ -57,7 +57,8 @@ export class Entity {
       isUnraveled:    false,
       pluckPhase:     'idle', // idle -> tension -> freeze -> exploded
       standoffIntensity: 0,
-      standoffContext: null
+      standoffContext: null,
+      isGrappling:    false
     };
 
     /** @type {number} Current world stage (0-5) */
@@ -110,11 +111,17 @@ export class Entity {
       this._geometry.rebuildCache();
     });
 
-    EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y, type }) => {
       const { wx, wy } = coords.screenToWorld(x, y);
       this._cursorWorld.wx = wx;
       this._cursorWorld.wy = wy;
       this._lastInputTime = performance.now();
+      
+      if (type === 'pointerdown' || type === 'keydown') {
+        this._state.isGrappling = true;
+      } else if (type === 'pointerup' || type === 'keyup') {
+        this._state.isGrappling = false;
+      }
     });
 
     EventBus.on(EVENTS.FIBER_PLUCK, ({ velocityX, yPos }) => {
@@ -208,7 +215,12 @@ export class Entity {
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
     // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor, this._state.pluckPhase, this._animator._introState, this._animator._temperament);
+    this._fiberSystem.update(
+      deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, 
+      this._state.behaviorState, isCursorStill, this._isReturningVisitor, 
+      this._state.pluckPhase, this._animator._introState, this._animator._temperament,
+      this._state.isGrappling
+    );
 
     // Temporarily translate context to entity's current screen position.
     // Geometry renders relative to the center it was given, so we offset it.

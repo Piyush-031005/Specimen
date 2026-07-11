@@ -203,7 +203,8 @@ export class FiberSystem {
   /**
    * Update fiber physics
    */
-  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0) {
+  update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0, isGrappling = false) {
+    this._isGrappling = isGrappling;
     // Track cursor for render. Fallback to center to prevent NaN if undefined.
     this._cursorX = targetCpX !== undefined ? targetCpX : this._coords.center.x;
     this._cursorY = targetCpY !== undefined ? targetCpY : this._coords.center.y;
@@ -330,7 +331,10 @@ export class FiberSystem {
       // Temperament directly limits how relaxed the organism can be.
       // If temperament is negative (guarded), it stays tense even when supposedly calm.
       // If positive (playful), it reaches out even further.
-      if (temperament < 0) {
+      if (this._isGrappling) {
+        tensionMod *= 2.5; // Aggressive reach
+        breathMod = 3.0; // Heavy, erratic breathing
+      } else if (temperament < 0) {
         tensionMod *= (1.0 + (temperament * 0.4)); // e.g., -1.0 means tension drops by 40% (tighter knot)
         // Control point is pulled back towards center (reluctant to reach for cursor)
         finalTargetCpX = lerp(finalTargetCpX, cx, Math.abs(temperament) * 0.6);
@@ -447,17 +451,27 @@ export class FiberSystem {
         breath = 0; // Absolute stillness
         unraveledCpX = cx; // Snapped to center for 1 frame freeze
         unraveledCpY = cy;
+      } else if (this._isGrappling) {
+        // Grapple mode: Organism lunges and completely wraps around the cursor
+        unraveledCpX = lerp(unraveledCpX, finalTargetCpX, 0.85);
+        unraveledCpY = lerp(unraveledCpY, finalTargetCpY, 0.85);
       }
       
       // THE BIG JUMP: Tentacle Wriggle (Aquatic, alien writhing)
-      const wriggleX = Math.cos(time * f.speed * 2.0 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
-      const wriggleY = Math.sin(time * f.speed * 2.5 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      let wriggleX = Math.cos(time * f.speed * 2.0 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      let wriggleY = Math.sin(time * f.speed * 2.5 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      
+      if (this._isGrappling) {
+          wriggleX *= 3.0; // Violent thrashing
+          wriggleY *= 3.0;
+      }
       
       const targetCurrentCpX = lerp(cx, unraveledCpX + breathDirX, this._unravelProgress) + (this._unravelProgress === 0 ? globalVibrationX * 2 : 0) + (f.phantomTwitchTimer > 0 ? f.phantomTwitchX : 0) + parallaxX + wriggleX;
       const targetCurrentCpY = lerp(cy, unraveledCpY + breathDirY, this._unravelProgress) + parallaxY + wriggleY;
       
       // Defensive state snaps quickly, calm state flows slowly
       let responseSpeed = behaviorState === 'defensive' ? 12.0 : (4.0 * hierarchyMod);
+      if (this._isGrappling) responseSpeed = 60.0; // Instant snap to cursor
       if (pluckPhase === 'tension') responseSpeed = 40.0;
       if (this._recoilOvershoot > 0) responseSpeed = 50.0; // Exploding outward
       if (pluckPhase === 'freeze') responseSpeed = 100.0; // Instant lock
@@ -595,10 +609,13 @@ export class FiberSystem {
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
       
-      // Bioluminescence and Deep Red Background
+      // Bioluminescence, Deep Red Background, and Grappling Warning
       let r = 255, g = 255, b = 255;
       
-      if (f.isDeepRed) {
+      if (this._isGrappling) {
+         r = 255; g = 80; b = 0; // Aggressive Blood Orange / Gold warning color
+         ctx.globalAlpha = Math.min(1.0, opacity * 1.5);
+      } else if (f.isDeepRed) {
          r = 150; g = 10; b = 10; // Deep fleshy red for the background
          ctx.globalAlpha = opacity * 0.7; // Push it further back
       } else if (f.synapticGlow > 0.1) {
@@ -732,11 +749,19 @@ export class FiberSystem {
     
     // 1. The Outer Translucent Membrane (Fleshy Sac)
     ctx.beginPath();
-    // Deep cyan/blue outer sac, heavily transparent
-    ctx.fillStyle = `rgba(10, 25, 35, ${0.7 + arrivalBright})`;
-    ctx.strokeStyle = `rgba(0, 200, 255, ${0.4 + arrivalBright})`;
+    
+    // Shift sac color to blood orange when grappling
+    if (this._isGrappling) {
+       ctx.fillStyle = `rgba(40, 10, 0, ${0.7 + arrivalBright})`;
+       ctx.strokeStyle = `rgba(255, 80, 0, ${0.8 + arrivalBright})`;
+       ctx.shadowColor = 'rgba(255, 100, 0, 0.8)';
+    } else {
+       ctx.fillStyle = `rgba(10, 25, 35, ${0.7 + arrivalBright})`;
+       ctx.strokeStyle = `rgba(0, 200, 255, ${0.4 + arrivalBright})`;
+       ctx.shadowColor = 'rgba(0, 200, 255, 0.6)';
+    }
+    
     ctx.lineWidth = 2.0;
-    ctx.shadowColor = 'rgba(0, 200, 255, 0.6)';
     ctx.shadowBlur = 30 + (this._brainArrivalPulse * 20);
     
     // Draw an imperfect, undulating circular membrane
@@ -760,8 +785,14 @@ export class FiberSystem {
     const py = bDist > 0 ? (bdy / bDist) * maxEmbryoShift : 0;
     
     ctx.beginPath();
-    // Brilliant hot cyan for the sentient embryo
-    ctx.fillStyle = `rgba(0, 255, 255, ${0.9 + arrivalBright})`;
+    // Shift embryo to intense gold/white when grappling
+    if (this._isGrappling) {
+       ctx.fillStyle = `rgba(255, 200, 100, ${0.9 + arrivalBright})`;
+       ctx.shadowColor = `rgba(255, 150, 0, 1.0)`;
+    } else {
+       ctx.fillStyle = `rgba(0, 255, 255, ${0.9 + arrivalBright})`;
+    }
+    
     ctx.shadowBlur = 20;
     ctx.arc(this._brainX + px, this._brainY + py, 10 + (this._brainArrivalPulse * 5.0), 0, Math.PI * 2);
     ctx.fill();
