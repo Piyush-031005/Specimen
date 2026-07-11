@@ -405,7 +405,6 @@ export class FiberSystem {
       }
       
       // Editor's Cut: Organic metabolic breathing with asymmetric shifting center of gravity.
-      const time = performance.now() * 0.001;
       let breath = this._calculateMetabolicBreath(time, f.speed, f.phase) * 8 * this._unravelProgress;
       
       // Calculate a drifting Center of Gravity for this fiber's breath
