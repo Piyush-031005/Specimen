@@ -20,6 +20,12 @@ export class FiberSystem {
     // The global state of the unraveling [0 to 1]
     this._unravelProgress = 0;
     
+    // Brain tracking (The Notice effect)
+    this._brainX = coords.center.x;
+    this._brainY = coords.center.y;
+    this._cursorX = coords.center.x;
+    this._cursorY = coords.center.y;
+    
     this._generateFibers();
   }
 
@@ -131,6 +137,8 @@ export class FiberSystem {
         currCpX: cx,
         currCpY: cy,
         
+        synapticGlow: 0,
+        
         // Environmental echo state
         phantomTwitchTimer: 0,
         phantomTwitchX: 0
@@ -174,6 +182,10 @@ export class FiberSystem {
    * Update fiber physics
    */
   update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0) {
+    // Track cursor for render
+    this._cursorX = targetCpX;
+    this._cursorY = targetCpY;
+    
     // Determine target progress
     let targetProgress = isUnraveled ? 1.0 : 0.0;
     
@@ -209,6 +221,27 @@ export class FiberSystem {
     const h = this._coords.cssHeight;
     const cx = this._coords.center.x;
     const cy = this._coords.center.y;
+    
+    // Brain tracking (Notice Effect)
+    // The core leans slightly towards the cursor to acknowledge it.
+    let targetBrainX = cx;
+    let targetBrainY = cy;
+    
+    if (isUnraveled) {
+      const dxC = targetCpX - cx;
+      const dyC = targetCpY - cy;
+      const distC = Math.sqrt(dxC * dxC + dyC * dyC);
+      if (distC > 0) {
+         // Max lean is 25px
+         const leanMag = Math.min(25, distC * 0.1); 
+         targetBrainX = cx + (dxC / distC) * leanMag;
+         targetBrainY = cy + (dyC / distC) * leanMag;
+      }
+    }
+    
+    this._brainX = expDecay(this._brainX, targetBrainX, 10.0, deltaSeconds);
+    this._brainY = expDecay(this._brainY, targetBrainY, 10.0, deltaSeconds);
+
     const baseStartY = cy - (h * 0.4);
     const baseEndY = cy + (h * 0.4);
 
@@ -281,8 +314,8 @@ export class FiberSystem {
       }
 
       // Target anchor points based on unravel progress and tension
-      const targetStartX = lerp(cx, lerp(cx, f.tStartX, tensionMod), this._unravelProgress);
-      const targetStartY = lerp(baseStartY, lerp(cy, f.tStartY, tensionMod), this._unravelProgress);
+      const targetStartX = lerp(cx, lerp(this._brainX, f.tStartX, tensionMod), this._unravelProgress);
+      const targetStartY = lerp(baseStartY, lerp(this._brainY, f.tStartY, tensionMod), this._unravelProgress);
       const targetEndX = lerp(cx, lerp(cx, f.tEndX, tensionMod), this._unravelProgress);
       const targetEndY = lerp(baseEndY, lerp(cy, f.tEndY, tensionMod), this._unravelProgress);
       
@@ -291,10 +324,24 @@ export class FiberSystem {
       f.currEndX = targetEndX + (this._unravelProgress === 0 ? globalVibrationX : 0);
       f.currEndY = targetEndY;
       
+      // Synaptic Glow (Notice Effect)
+      // When the cursor is near a peripheral synapse, it lights up
+      let targetGlow = 0;
+      if (isUnraveled && !isCursorStill) {
+         const dxSyn = f.currEndX - targetCpX;
+         const dySyn = f.currEndY - targetCpY;
+         const distSyn = Math.sqrt(dxSyn * dxSyn + dySyn * dySyn);
+         const glowRadius = 250;
+         if (distSyn < glowRadius) {
+            targetGlow = Math.pow(1 - (distSyn / glowRadius), 2);
+         }
+      }
+      f.synapticGlow = expDecay(f.synapticGlow, targetGlow, 15.0, deltaSeconds);
+      
       // Intrusive Cursor: The user is trespassing. Fibers bend OUT OF THE WAY to accommodate the intrusion.
       // We calculate distance from the unraveled control point to the cursor.
-      let unraveledCpX = cx + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * this._recoilOvershoot);
-      let unraveledCpY = cy + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * this._recoilOvershoot);
+      let unraveledCpX = this._brainX + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * this._recoilOvershoot);
+      let unraveledCpY = this._brainY + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * this._recoilOvershoot);
       
       if (isUnraveled && pluckPhase !== 'freeze') {
         const dx = unraveledCpX - finalTargetCpX;
@@ -434,10 +481,16 @@ export class FiberSystem {
          opacity = 0.8 * masterOpacity; // Sharp contrast
          lineWidthMod = 2.0; 
       }
+      
+      // Add Synaptic Glow
+      opacity = Math.min(1.0, opacity + (f.synapticGlow * 0.8 * masterOpacity));
+      if (f.synapticGlow > 0.1) {
+         lineWidthMod += f.synapticGlow * 1.5;
+      }
 
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
-      ctx.strokeStyle = f.isEmergentHero ? 'rgba(255, 255, 255, 0.9)' : 'rgba(200, 200, 200, 0.4)';
+      ctx.strokeStyle = f.isEmergentHero || f.synapticGlow > 0.3 ? 'rgba(255, 255, 255, 0.9)' : 'rgba(200, 200, 200, 0.4)';
       
       ctx.beginPath();
       ctx.moveTo(f.currStartX, f.currStartY);
@@ -459,20 +512,20 @@ export class FiberSystem {
         // Major structural node (Synapse)
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-        ctx.arc(nx, ny, 2.5, 0, Math.PI * 2);
+        ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 2.0), 0, Math.PI * 2);
         ctx.fill();
         
         // Faint glowing halo around major nodes
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.arc(nx, ny, 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.15 + f.synapticGlow * 0.4) + ')';
+        ctx.arc(nx, ny, 8 + (f.synapticGlow * 10), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'secondary') {
         // Medium node
-        ctx.globalAlpha = masterOpacity * 0.7;
+        ctx.globalAlpha = masterOpacity * Math.min(1.0, 0.7 + f.synapticGlow);
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.arc(nx, ny, 1.2, 0, Math.PI * 2);
+        ctx.arc(nx, ny, 1.2 + (f.synapticGlow * 1.5), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'tertiary') {
         // Tiny dust node
@@ -490,8 +543,24 @@ export class FiberSystem {
     ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
     ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
     ctx.shadowBlur = 15;
-    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.arc(this._brainX, this._brainY, 5, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Render an inner "pupil" that literally looks at the cursor for the deepest subconscious feel
+    if (this._unravelProgress > 0) {
+       const bdx = this._cursorX - this._brainX;
+       const bdy = this._cursorY - this._brainY;
+       const bDist = Math.sqrt(bdx * bdx + bdy * bdy);
+       const maxPupilShift = 2.0;
+       const px = bDist > 0 ? (bdx / bDist) * maxPupilShift : 0;
+       const py = bDist > 0 ? (bdy / bDist) * maxPupilShift : 0;
+       
+       ctx.beginPath();
+       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+       ctx.shadowBlur = 0;
+       ctx.arc(this._brainX + px, this._brainY + py, 1.5, 0, Math.PI * 2);
+       ctx.fill();
+    }
     
     ctx.restore();
   }
