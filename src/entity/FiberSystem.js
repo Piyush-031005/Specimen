@@ -232,8 +232,8 @@ export class FiberSystem {
       const dyC = targetCpY - cy;
       const distC = Math.sqrt(dxC * dxC + dyC * dyC);
       if (distC > 0) {
-         // Max lean is 25px
-         const leanMag = Math.min(25, distC * 0.1); 
+         // Very subtle body lean (max 5px) instead of heavy sliding
+         const leanMag = Math.min(5, distC * 0.02); 
          targetBrainX = cx + (dxC / distC) * leanMag;
          targetBrainY = cy + (dyC / distC) * leanMag;
       }
@@ -331,12 +331,15 @@ export class FiberSystem {
          const dxSyn = f.currEndX - targetCpX;
          const dySyn = f.currEndY - targetCpY;
          const distSyn = Math.sqrt(dxSyn * dxSyn + dySyn * dySyn);
-         const glowRadius = 250;
+         const glowRadius = 350; // Increased radius for confident perception
          if (distSyn < glowRadius) {
-            targetGlow = Math.pow(1 - (distSyn / glowRadius), 2);
+            targetGlow = Math.pow(1 - (distSyn / glowRadius), 1.5); // More aggressive curve
          }
       }
-      f.synapticGlow = expDecay(f.synapticGlow, targetGlow, 15.0, deltaSeconds);
+      
+      // Lingering recovery: Fast to light up (attention), slow to fade (linger)
+      const decaySpeed = (targetGlow > f.synapticGlow) ? 25.0 : 2.0; // 2.0 creates a ~0.5s linger
+      f.synapticGlow = expDecay(f.synapticGlow, targetGlow, decaySpeed, deltaSeconds);
       
       // Intrusive Cursor: The user is trespassing. Fibers bend OUT OF THE WAY to accommodate the intrusion.
       // We calculate distance from the unraveled control point to the cursor.
@@ -512,13 +515,13 @@ export class FiberSystem {
         // Major structural node (Synapse)
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-        ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 2.0), 0, Math.PI * 2);
+        ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 3.5), 0, Math.PI * 2);
         ctx.fill();
         
-        // Faint glowing halo around major nodes
+        // Confident glowing halo around major nodes
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.15 + f.synapticGlow * 0.4) + ')';
-        ctx.arc(nx, ny, 8 + (f.synapticGlow * 10), 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.15 + f.synapticGlow * 0.7) + ')';
+        ctx.arc(nx, ny, 8 + (f.synapticGlow * 20), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'secondary') {
         // Medium node
@@ -537,28 +540,37 @@ export class FiberSystem {
       }
     }
     
-    // The Core Focal Point (The Brain)
+    // The Core Focal Point (The Brain / Eye)
     ctx.globalAlpha = masterOpacity;
+    
+    // Outer Sclera
     ctx.beginPath();
     ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
     ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
     ctx.shadowBlur = 15;
-    ctx.arc(this._brainX, this._brainY, 5, 0, Math.PI * 2);
+    ctx.arc(this._brainX, this._brainY, 6, 0, Math.PI * 2);
     ctx.fill();
     
-    // Render an inner "pupil" that literally looks at the cursor for the deepest subconscious feel
+    // Render an inner "pupil" that clearly orients towards the cursor
     if (this._unravelProgress > 0) {
        const bdx = this._cursorX - this._brainX;
        const bdy = this._cursorY - this._brainY;
        const bDist = Math.sqrt(bdx * bdx + bdy * bdy);
-       const maxPupilShift = 2.0;
+       const maxPupilShift = 3.5; // Extends to the edge of the sclera
        const px = bDist > 0 ? (bdx / bDist) * maxPupilShift : 0;
        const py = bDist > 0 ? (bdy / bDist) * maxPupilShift : 0;
        
+       // Dark Iris
        ctx.beginPath();
-       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+       ctx.fillStyle = 'rgba(15, 15, 15, 1.0)';
        ctx.shadowBlur = 0;
-       ctx.arc(this._brainX + px, this._brainY + py, 1.5, 0, Math.PI * 2);
+       ctx.arc(this._brainX + px, this._brainY + py, 3.5, 0, Math.PI * 2);
+       ctx.fill();
+       
+       // Center Pupil Light (Reflection)
+       ctx.beginPath();
+       ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+       ctx.arc(this._brainX + px + (px * 0.15), this._brainY + py + (py * 0.15), 1.2, 0, Math.PI * 2);
        ctx.fill();
     }
     
