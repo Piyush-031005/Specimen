@@ -50,10 +50,66 @@
       }
 
 
+      /* HUD STYLES (The Next Big Jump) */
+      #specimen-hud {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        z-index: 100;
+        padding: 30px;
+        font-family: 'IBM Plex Mono', monospace;
+        color: rgba(0, 255, 255, 0.6);
+        text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+        font-size: 11px;
+        letter-spacing: 2px;
+        transition: color 0.3s, text-shadow 0.3s;
+      }
+      
+      #specimen-hud.danger {
+        color: rgba(255, 80, 0, 0.9);
+        text-shadow: 0 0 10px rgba(255, 80, 0, 0.8);
+      }
+      
+      .hud-top-left { position: absolute; top: 30px; left: 30px; }
+      .hud-title { font-weight: bold; margin-bottom: 5px; font-size: 13px; letter-spacing: 4px; }
+      .hud-status { opacity: 0.8; }
+      
+      .hud-top-right { position: absolute; top: 30px; right: 30px; text-align: right; }
+      .hud-top-right div { margin-bottom: 5px; }
+      
+      .hud-bottom-left { position: absolute; bottom: 30px; left: 30px; opacity: 0.7; }
+      .hud-log div { margin-top: 4px; }
+      
+      /* Camera Reticles */
+      .hud-reticle { position: absolute; width: 25px; height: 25px; border: 1px solid currentColor; opacity: 0.5; transition: border-color 0.3s; }
+      .hud-reticle.top-left { top: 20px; left: 20px; border-right: none; border-bottom: none; }
+      .hud-reticle.top-right { top: 20px; right: 20px; border-left: none; border-bottom: none; }
+      .hud-reticle.bottom-left { bottom: 20px; left: 20px; border-right: none; border-top: none; }
+      .hud-reticle.bottom-right { bottom: 20px; right: 20px; border-left: none; border-top: none; }
     </style>
   </head>
   <body>
     <canvas id="canvas" aria-label="An interactive digital organism" role="img"></canvas>
+    
+    <!-- THE BIG JUMP: SPECIMEN HUD -->
+    <div id="specimen-hud">
+      <div class="hud-top-left">
+        <div class="hud-title">PROJECT: SPECIMEN</div>
+        <div id="hud-status" class="hud-status">CONTAINMENT STABLE</div>
+      </div>
+      <div class="hud-top-right">
+        <div id="hud-coords">POS: [0, 0]</div>
+        <div id="hud-bio" style="transition: opacity 0.2s">HRT: 60 BPM</div>
+      </div>
+      <div class="hud-bottom-left">
+        <div id="hud-log" class="hud-log"></div>
+      </div>
+      <!-- Reticles -->
+      <div class="hud-reticle top-left"></div>
+      <div class="hud-reticle top-right"></div>
+      <div class="hud-reticle bottom-left"></div>
+      <div class="hud-reticle bottom-right"></div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

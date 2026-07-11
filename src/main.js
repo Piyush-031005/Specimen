@@ -22,6 +22,8 @@ import { CoordinateSystem } from './engine/CoordinateSystem.js';
 import { AnimationScheduler } from './engine/AnimationScheduler.js';
 
 import { Entity } from './entity/Entity.js';
+import { PlanktonSystem } from './entity/PlanktonSystem.js';
+import { HUDSystem } from './ui/HUDSystem.js';
 
 import { EntityHeartbeat } from './pattern/EntityHeartbeat.js';
 import { DisplacementWave } from './pattern/DisplacementWave.js';
@@ -57,7 +59,9 @@ const displacementWave = new DisplacementWave(coords);   // eslint-disable-line 
 const commWindow    = new CommunicationWindow(); // eslint-disable-line no-unused-vars
 const behavior      = new BehaviorEngine(memory);
 const audio         = new AudioEngine(memory);
+const hud           = new HUDSystem(); // HUD Overlay for cinematic effect
 const entity        = new Entity(coords, scheduler, memory);
+const plankton      = new PlanktonSystem(coords); // Added fluid background particles
 const customCursor  = new CustomCursor(coords);
 const signatureMoment = new SignatureMoment(customCursor, coords, memory);
 
