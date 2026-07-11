@@ -33,6 +33,9 @@ export class FiberSystem {
     // Signal Propagation
     this._signals = [];
     
+    // Arrival Pulse (Brain receives a signal)
+    this._brainArrivalPulse = 0;
+    
     this._generateFibers();
   }
 
@@ -146,6 +149,7 @@ export class FiberSystem {
         
         synapticGlow: 0,
         lastSignalTime: 0,
+        memoryTrace: 0, // Permanent biological memory of interaction
         
         // Environmental echo state
         phantomTwitchTimer: 0,
@@ -443,15 +447,36 @@ export class FiberSystem {
     }
     
     // Update Signals
+    let hasSensationSignal = false;
     for (let i = this._signals.length - 1; i >= 0; i--) {
       const s = this._signals[i];
-      s.progress += s.speed * s.direction * deltaSeconds;
+      
+      if (s.direction === -1) hasSensationSignal = true; // A thought is returning to the brain
+      
+      // Speed variation: Slower at the bend (middle of the curve), faster at the ends
+      const speedBend = 1.0 - (Math.sin(s.progress * Math.PI) * 0.5);
+      s.progress += s.speed * speedBend * s.direction * deltaSeconds;
       
       // Remove if arrived at destination
-      if (s.progress < 0 || s.progress > 1) {
+      if (s.progress <= 0 || s.progress >= 1) {
+         if (s.progress <= 0 && s.direction === -1) {
+            // ARRIVAL AT BRAIN
+            this._brainArrivalPulse = 1.0;
+            // FORM MEMORY
+            const f = this._fibers[s.fiberIndex];
+            if (f) {
+               f.memoryTrace = Math.min(1.0, f.memoryTrace + 0.25); // Max out after 4 touches
+            }
+         }
          this._signals.splice(i, 1);
       }
     }
+    
+    // Brain arrival pulse decays extremely fast (80ms flash)
+    this._brainArrivalPulse = expDecay(this._brainArrivalPulse, 0, 15.0, deltaSeconds);
+    
+    // Global signal dimming: When a thought travels, the rest of the organism quiets down to increase contrast
+    this._globalSignalDim = expDecay(this._globalSignalDim || 0, hasSensationSignal ? 0.25 : 0, 5.0, deltaSeconds);
   }
 
   /**
@@ -520,27 +545,44 @@ export class FiberSystem {
     // UNRAVELED NEURAL ORGANISM (Readability Polish)
     ctx.shadowBlur = 0; // Disable shadow for extreme sharpness
     
+    // Dim the entire organism slightly when a thought travels to guide the eye
+    const contrastMasterOpacity = masterOpacity * (1.0 - (this._globalSignalDim || 0));
+    
     // Draw Fibers
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
       // Reduce baseline opacity to create negative space, but make heroes extremely sharp
-      let opacity = f.baseOpacity * masterOpacity * (0.05 + this._unravelProgress * 0.95);
+      let opacity = f.baseOpacity * contrastMasterOpacity * (0.05 + this._unravelProgress * 0.95);
       let lineWidthMod = 1.0;
         
       if (f.isEmergentHero) {
-         opacity = 0.8 * masterOpacity; // Sharp contrast
+         opacity = 0.8 * contrastMasterOpacity; // Sharp contrast
          lineWidthMod = 2.0; 
       }
       
+      // Memory Trace: Permanently strengthen paths that have been interacted with
+      if (f.memoryTrace > 0.01) {
+         opacity = Math.min(1.0, opacity + (f.memoryTrace * 0.4 * contrastMasterOpacity));
+         lineWidthMod += f.memoryTrace * 0.8;
+      }
+      
       // Add Synaptic Glow
-      opacity = Math.min(1.0, opacity + (f.synapticGlow * 0.8 * masterOpacity));
+      opacity = Math.min(1.0, opacity + (f.synapticGlow * 0.8 * contrastMasterOpacity));
       if (f.synapticGlow > 0.1) {
          lineWidthMod += f.synapticGlow * 1.5;
       }
 
       ctx.globalAlpha = opacity;
       ctx.lineWidth = f.lineWidth * lineWidthMod;
-      ctx.strokeStyle = f.isEmergentHero || f.synapticGlow > 0.3 ? 'rgba(255, 255, 255, 0.9)' : 'rgba(200, 200, 200, 0.4)';
+      
+      // If fiber has strong memory, it turns slightly warm gold-white instead of cool white
+      const r = 255;
+      const g = 255;
+      const b = Math.floor(255 - (f.memoryTrace * 50)); // Reduces blue to make it warm
+      
+      ctx.strokeStyle = f.isEmergentHero || f.synapticGlow > 0.3 || f.memoryTrace > 0.5 
+                        ? `rgba(${r}, ${g}, ${b}, 0.9)` 
+                        : 'rgba(200, 200, 200, 0.4)';
       
       ctx.beginPath();
       ctx.moveTo(f.currStartX, f.currStartY);
@@ -550,7 +592,7 @@ export class FiberSystem {
     
     // Draw Nodes (Visual Hierarchy & Silhouette)
     // Build a clear anatomical hierarchy outward from the brain
-    ctx.globalAlpha = masterOpacity;
+    ctx.globalAlpha = contrastMasterOpacity;
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
       
@@ -562,24 +604,26 @@ export class FiberSystem {
         // Major structural node (Synapse)
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-        ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 3.5), 0, Math.PI * 2);
+        // Memory trace permanently enlarges the synapse slightly
+        const memBoost = f.memoryTrace * 1.5;
+        ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 3.5) + memBoost, 0, Math.PI * 2);
         ctx.fill();
         
         // Confident glowing halo around major nodes
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.15 + f.synapticGlow * 0.7) + ')';
-        ctx.arc(nx, ny, 8 + (f.synapticGlow * 20), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + f.synapticGlow * 0.7 + f.memoryTrace * 0.1})`;
+        ctx.arc(nx, ny, 8 + (f.synapticGlow * 20) + (memBoost * 2), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'secondary') {
         // Medium node
-        ctx.globalAlpha = masterOpacity * Math.min(1.0, 0.7 + f.synapticGlow);
+        ctx.globalAlpha = contrastMasterOpacity * Math.min(1.0, 0.7 + f.synapticGlow + f.memoryTrace);
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.arc(nx, ny, 1.2 + (f.synapticGlow * 1.5), 0, Math.PI * 2);
+        ctx.arc(nx, ny, 1.2 + (f.synapticGlow * 1.5) + (f.memoryTrace * 0.8), 0, Math.PI * 2);
         ctx.fill();
       } else if (f.hierarchyLevel === 'tertiary') {
         // Tiny dust node
-        ctx.globalAlpha = masterOpacity * 0.4;
+        ctx.globalAlpha = contrastMasterOpacity * 0.4;
         ctx.beginPath();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.arc(nx, ny, 0.6, 0, Math.PI * 2);
@@ -593,8 +637,9 @@ export class FiberSystem {
         const f = this._fibers[s.fiberIndex];
         if (!f) continue;
         
-        // Draw a soft, multi-segment pulse (like fluid moving through a vein)
-        for (let k = 0; k < 6; k++) {
+        // Decisive Head, fading tail
+        // 4 segments instead of 6 to make it sharper and cleaner
+        for (let k = 0; k < 4; k++) {
             // Trail behind the current progress
             const offset = (k * 0.02) * -s.direction; 
             const t = Math.max(0, Math.min(1, s.progress + offset));
@@ -603,20 +648,23 @@ export class FiberSystem {
             const px = omt * omt * f.currStartX + 2 * omt * t * f.currCpX + t * t * f.currEndX;
             const py = omt * omt * f.currStartY + 2 * omt * t * f.currCpX + t * t * f.currEndY;
             
-            const alpha = s.intensity * masterOpacity * (1 - k / 6);
+            // Steep drop off in opacity for tail
+            const alpha = s.intensity * masterOpacity * Math.pow(1 - k / 4, 2);
             ctx.beginPath();
             ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
             
-            // Only the head of the pulse glows
+            // Decisive Head
             if (k === 0) {
-               ctx.shadowBlur = 8;
-               ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+               ctx.shadowBlur = 10;
+               ctx.shadowColor = 'rgba(255, 255, 255, 1.0)';
             } else {
                ctx.shadowBlur = 0;
             }
             
-            const baseSize = f.isEmergentHero ? 1.5 : 1.0;
-            ctx.arc(px, py, baseSize * (2.0 - k * 0.2), 0, Math.PI * 2);
+            // Tail shrinks drastically
+            const baseSize = f.isEmergentHero ? 1.8 : 1.2;
+            const size = k === 0 ? baseSize * 2.0 : baseSize * (1.0 - k * 0.25);
+            ctx.arc(px, py, size, 0, Math.PI * 2);
             ctx.fill();
         }
     }
@@ -624,12 +672,15 @@ export class FiberSystem {
     // The Core Focal Point (The Brain / Eye)
     ctx.globalAlpha = masterOpacity;
     
+    // Arrival Pulse: Core slightly brightens when information is received
+    const arrivalBright = this._brainArrivalPulse * 0.3;
+    
     // Outer Sclera
     ctx.beginPath();
-    ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+    ctx.fillStyle = `rgba(255, 255, 255, ${1.0 + arrivalBright})`;
     ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-    ctx.shadowBlur = 15;
-    ctx.arc(this._brainX, this._brainY, 6, 0, Math.PI * 2);
+    ctx.shadowBlur = 15 + (this._brainArrivalPulse * 15);
+    ctx.arc(this._brainX, this._brainY, 6 + (this._brainArrivalPulse * 1.5), 0, Math.PI * 2);
     ctx.fill();
     
     // Render an inner "pupil" that clearly orients towards the cursor
@@ -641,11 +692,14 @@ export class FiberSystem {
        const px = bDist > 0 ? (bdx / bDist) * maxPupilShift : 0;
        const py = bDist > 0 ? (bdy / bDist) * maxPupilShift : 0;
        
+       // Arrival Pulse: Micro contraction of the pupil
+       const pupilContraction = this._brainArrivalPulse * 1.0;
+       
        // Dark Iris
        ctx.beginPath();
        ctx.fillStyle = 'rgba(15, 15, 15, 1.0)';
        ctx.shadowBlur = 0;
-       ctx.arc(this._brainX + px, this._brainY + py, 3.5, 0, Math.PI * 2);
+       ctx.arc(this._brainX + px, this._brainY + py, Math.max(1.5, 3.5 - pupilContraction), 0, Math.PI * 2);
        ctx.fill();
        
        // Center Pupil Light (Reflection)
