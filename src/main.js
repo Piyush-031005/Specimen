@@ -135,6 +135,94 @@ const sessionData = memory.load();
 // 2. Renderer init (resize listener, canvas sizing)
 renderer.init();
 
+// Fossil Canvas Init
+const fossilCanvas = document.getElementById('fossil-canvas');
+const fossilCtx = fossilCanvas.getContext('2d');
+function resizeFossilCanvas() {
+    fossilCanvas.width = window.innerWidth;
+    fossilCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeFossilCanvas);
+resizeFossilCanvas();
+
+// Draw Fossils/Scars on click
+EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+    fossilCtx.beginPath();
+    const radius = Math.random() * 20 + 10;
+    fossilCtx.arc(x, y, radius, 0, Math.PI * 2);
+    fossilCtx.fillStyle = `rgba(${Math.random() > 0.5 ? 255 : 20}, ${Math.random() > 0.5 ? 20 : 200}, ${Math.random() > 0.5 ? 50 : 255}, 0.05)`;
+    fossilCtx.fill();
+    
+    // Draw broken branches (scars)
+    fossilCtx.beginPath();
+    fossilCtx.moveTo(x, y);
+    for (let i = 0; i < 5; i++) {
+        fossilCtx.lineTo(x + (Math.random() * 100 - 50), y + (Math.random() * 100 - 50));
+    }
+    fossilCtx.strokeStyle = `rgba(255, 255, 255, 0.03)`;
+    fossilCtx.lineWidth = 1;
+    fossilCtx.stroke();
+});
+
+// The Climax (Containment Report)
+let climaxTriggered = false;
+EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
+    if (level === 3 && !climaxTriggered) {
+        climaxTriggered = true;
+        
+        // Trigger report after 15 seconds of Level 3
+        setTimeout(() => {
+            const canvas = document.getElementById('canvas');
+            const hud = document.getElementById('specimen-hud');
+            const fossil = document.getElementById('fossil-canvas');
+            
+            canvas.style.transition = 'opacity 3s ease';
+            canvas.style.opacity = '0';
+            hud.style.opacity = '0';
+            fossil.style.transition = 'opacity 3s ease';
+            fossil.style.opacity = '0';
+            
+            setTimeout(() => {
+                const report = document.getElementById('containment-report');
+                report.classList.add('visible');
+                
+                const mem = memory.load();
+                const interactions = mem.totalInteractions || 0;
+                let trait = "OBSERVANT";
+                if (interactions > 80) trait = "AGGRESSIVE";
+                else if (interactions < 30) trait = "HESITANT";
+                else trait = "CURIOUS";
+                
+                const trustVal = Math.floor(behavior.trust);
+                
+                setTimeout(() => { document.getElementById('rep-subj').classList.add('visible'); }, 1000);
+                setTimeout(() => { 
+                    const tr = document.getElementById('rep-trait');
+                    tr.textContent = `DOMINANT TRAIT: ${trait}`;
+                    tr.classList.add('visible'); 
+                }, 3000);
+                setTimeout(() => { 
+                    const tru = document.getElementById('rep-trust');
+                    tru.textContent = `TRUST ESTABLISHED: ${trustVal}%`;
+                    tru.classList.add('visible'); 
+                }, 5000);
+                setTimeout(() => { 
+                    const ti = document.getElementById('rep-time');
+                    const timeAlive = Math.floor(performance.now() / 1000);
+                    const m = Math.floor(timeAlive / 60).toString().padStart(2, '0');
+                    const s = (timeAlive % 60).toString().padStart(2, '0');
+                    ti.textContent = `OBSERVATION TIME: ${m}:${s}`;
+                    ti.classList.add('visible'); 
+                }, 7000);
+                
+                setTimeout(() => { document.getElementById('rep-climax').classList.add('visible'); }, 10000);
+                
+            }, 3000);
+            
+        }, 15000);
+    }
+});
+
 // 3. Behavior engine starts FSM
 behavior.init();
 
