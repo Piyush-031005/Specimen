@@ -629,8 +629,7 @@ export class FiberSystem {
             this._shootWeb();
         }
         for (let i = this._webs.length - 1; i >= 0; i--) {
-            this._webs[i].progress += 0.016 * 0.5; // Simulate life progress
-            if (this._webs[i].progress >= 1.0) this._webs.splice(i, 1);
+            this._webs[i].progress = Math.min(1.0, this._webs[i].progress + 0.016 * 0.5); // Simulate life progress
         }
     }
   }

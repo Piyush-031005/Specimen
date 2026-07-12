@@ -17,10 +17,7 @@ export class CinematicIntro {
    * @returns {Promise<void>} Resolves when the intro is complete and the canvas should be revealed.
    */
   async play() {
-    // If we've already played it in this session (e.g., hot reload), just skip it
-    if (sessionStorage.getItem('specimen_intro_played')) {
-      return Promise.resolve();
-    }
+    // Always play for hackathon presentation purposes
     
     return new Promise((resolve) => {
       this._buildDOM();
