@@ -267,6 +267,11 @@ export class Entity {
       y: Math.max(margin, Math.min(this._coords.cssHeight - margin, rawScreen.y))
     };
 
+    const baseCx = this._coords.center.x;
+    const baseCy = this._coords.center.y;
+    const offsetX = screen.x - baseCx;
+    const offsetY = screen.y - baseCy;
+
     // Also get the target control point for fibers in screen space
     const targetWorldCpX = this._cursorWorld.wx + this._state.driftX; // fibers reach slightly past the body drift
     const targetWorldCpY = this._cursorWorld.wy + this._state.driftY;
@@ -275,20 +280,15 @@ export class Entity {
     const idleMs = this._lastInputTime ? (performance.now() - this._lastInputTime) : 0;
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
-    // Update fiber physics
+    // Update fiber physics - subtract offsetX so the translated canvas doesn't double the distance to the mouse
     this._fiberSystem.update(
-      deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, 
+      deltaSeconds, this._state.isUnraveled, targetScreenCp.x - offsetX, targetScreenCp.y - offsetY, 
       this._state.behaviorState, isCursorStill, this._isReturningVisitor, 
       this._state.pluckPhase, this._animator._introState, this._animator._temperament,
       this._state.isGrappling
     );
 
     // Temporarily translate context to entity's current screen position.
-    // Geometry renders relative to the center it was given, so we offset it.
-    const baseCx = this._coords.center.x;
-    const baseCy = this._coords.center.y;
-    const offsetX = screen.x - baseCx;
-    const offsetY = screen.y - baseCy;
 
     if (offsetX !== 0 || offsetY !== 0) {
       ctx.save();
