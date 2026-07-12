@@ -138,7 +138,7 @@ export const REALITY_LAWS = {
   MEMORY_DISTORTION: false,
   UNCERTAINTY: false,
   WITNESS: false,
-  IS_ORGANISM_VISIBLE: true, // Added for World Only recording
+  IS_ORGANISM_VISIBLE: false, // Set to false to prevent duplicate static organism rendering
   
   // CORE RESTORATION FLAGS (Pass 1)
   ENABLE_MOUSE_TENSION: false,

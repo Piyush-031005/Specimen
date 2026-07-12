@@ -704,7 +704,7 @@ export class FiberSystem {
          ctx.lineWidth = lineWidth * 0.8;
          ctx.strokeStyle = `rgba(255, 20, 40, ${opacity})`;
          
-         const shiftX = (this._mouseX - cx) * 0.005 + 2; // Dynamic 3D offset
+         const shiftX = (this._cursorX - cx) * 0.005 + 2; // Dynamic 3D offset
          
          ctx.beginPath();
          ctx.moveTo(sx + shiftX, sy);
@@ -735,7 +735,7 @@ export class FiberSystem {
     // Level 3: Central body mass (Anaglyph geometric core instead of soft orb)
     if (this._evolutionLevel === 3) {
       const bodyR = Math.min(this._coords.cssWidth, this._coords.cssHeight) * 0.04;
-      const shiftX = (this._mouseX - cx) * 0.005 + 3;
+      const shiftX = (this._cursorX - cx) * 0.005 + 3;
       
       ctx.globalCompositeOperation = 'screen';
       
@@ -776,7 +776,7 @@ export class FiberSystem {
           ctx.beginPath();
           if (this._evolutionLevel === 3) {
              // Anaglyph geometric crosshatch for apex joints instead of orbs
-             const shiftX = (this._mouseX - cx) * 0.005 + 1.5;
+             const shiftX = (this._cursorX - cx) * 0.005 + 1.5;
              ctx.globalCompositeOperation = 'screen';
              
              // Red joint
