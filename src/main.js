@@ -164,16 +164,21 @@ if (hudElement && !sessionStorage.getItem('specimen_intro_played')) {
 cinematicIntro.play().then(() => {
   if (hudElement) hudElement.style.opacity = '1';
 
-  // 6. Entity intro — fades in over 2.4s (smootherstep) after 600ms silence
-  entity.init();
+  // Trigger Blast Sequence
+  EventBus.emit(EVENTS.TRIGGER_BLAST_SEQUENCE);
 
-  // 7. Pulse generator starts (first pulse after TIMING.FIRST_PULSE_DELAY_MS)
-  heartbeat.start();
-
-  // The Impossible Observation (Scene 1): Prove reality exists before interaction
   setTimeout(() => {
-    EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
-  }, 3000);
+    // 6. Entity intro — fades in over 2.4s
+    entity.init();
+
+    // 7. Pulse generator starts
+    heartbeat.start();
+
+    // The Impossible Observation
+    setTimeout(() => {
+      EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
+    }, 3000);
+  }, 2000); // 2 second blast shockwave delay
 });
 
 // 8. Removed HintLayer

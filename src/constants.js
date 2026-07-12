@@ -76,6 +76,7 @@ export const EVENTS = Object.freeze({
 
   // Memory
   MEMORY_LOADED: 'memory:loaded',
+  TRIGGER_BLAST_SEQUENCE: 'trigger:blast_sequence',
   MEMORY_SAVED: 'memory:saved',
 
   // Signature moment

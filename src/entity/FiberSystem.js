@@ -632,6 +632,15 @@ export class FiberSystem {
             this._webs[i].progress = Math.min(1.0, this._webs[i].progress + 0.016 * 0.5); // Simulate life progress
         }
     }
+
+    if (this._blastWebs) {
+       for (let i = this._blastWebs.length - 1; i >= 0; i--) {
+          this._blastWebs[i].progress += this._blastWebs[i].speed;
+          if (this._blastWebs[i].progress > 2.0) { 
+             this._blastWebs.splice(i, 1);
+          }
+       }
+    }
   }
 
   /**
@@ -639,6 +648,23 @@ export class FiberSystem {
    */
   resetUnravel() {
     this._unravelProgress = 0;
+  }
+
+  /**
+   * Trigger a massive shockwave of fibers when the intro completes
+   */
+  triggerBlast() {
+      this._blastWebs = [];
+      const numWebs = 60;
+      for (let i = 0; i < numWebs; i++) {
+        const angle = (Math.PI * 2 / numWebs) * i + (Math.random() * 0.1);
+        this._blastWebs.push({
+           x: Math.cos(angle) * window.innerWidth * 1.5,
+           y: Math.sin(angle) * window.innerHeight * 1.5,
+           progress: 0,
+           speed: (0.02 + Math.random() * 0.08)
+        });
+      }
   }
 
   /**
@@ -678,6 +704,26 @@ export class FiberSystem {
     ctx.globalCompositeOperation = 'source-over'; 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    if (this._blastWebs && this._blastWebs.length > 0) {
+       this._blastWebs.forEach(w => {
+           const p = Math.min(1.0, w.progress);
+           const alpha = Math.max(0, 1.0 - (w.progress - 1.0)); 
+           
+           ctx.lineWidth = 3.0;
+           ctx.beginPath();
+           ctx.strokeStyle = `rgba(255, 20, 50, ${alpha})`;
+           ctx.moveTo(cx - 8, cy);
+           ctx.lineTo(cx - 8 + (w.x) * p, cy + (w.y) * p);
+           ctx.stroke();
+
+           ctx.beginPath();
+           ctx.strokeStyle = `rgba(20, 200, 255, ${alpha})`;
+           ctx.moveTo(cx + 8, cy);
+           ctx.lineTo(cx + 8 + (w.x) * p, cy + (w.y) * p);
+           ctx.stroke();
+       });
+    }
 
     // UNRAVELED NEURAL ORGANISM (Readability Polish)
     ctx.shadowBlur = 0; // Disable shadow for extreme sharpness

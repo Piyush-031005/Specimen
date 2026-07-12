@@ -50,65 +50,108 @@
       }
 
 
-      /* HUD STYLES (The Next Big Jump) */
+      /* AAA SCI-FI UI/UX */
       #specimen-hud {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
         pointer-events: none;
         z-index: 100;
-        padding: 30px;
         font-family: 'IBM Plex Mono', monospace;
-        color: rgba(0, 255, 255, 0.6);
-        text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+        color: rgba(0, 255, 255, 0.8);
+        text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
         font-size: 11px;
-        letter-spacing: 2px;
-        transition: color 0.3s, text-shadow 0.3s;
+        letter-spacing: 3px;
+        transition: all 0.5s ease;
       }
+
+      /* CRT Scanlines & Vignette */
+      .scanlines {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+        background-size: 100% 3px, 3px 100%;
+        box-shadow: inset 0 0 150px rgba(0,0,0,0.9);
+        z-index: -1;
+      }
+
+      /* Glassmorphism Panels */
+      .hud-panel {
+        position: absolute;
+        background: rgba(0, 10, 20, 0.4);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(0, 255, 255, 0.2);
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+        border-radius: 4px;
+        clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+      }
+
+      .hud-top-left { top: 40px; left: 40px; width: 300px; border-left: 3px solid rgba(0, 255, 255, 0.8); }
+      .hud-title { font-weight: bold; margin-bottom: 8px; font-size: 16px; letter-spacing: 5px; color: #fff; text-shadow: 0 0 15px rgba(0, 255, 255, 0.8); }
+      .hud-status { opacity: 0.9; color: #0f0; text-shadow: 0 0 10px #0f0; font-weight: bold; }
       
+      .hud-top-right { top: 40px; right: 40px; text-align: right; border-right: 3px solid rgba(0, 255, 255, 0.8); }
+      .hud-top-right div { margin-bottom: 5px; font-size: 10px; }
+      
+      .hud-bottom-left { bottom: 40px; left: 40px; width: 300px; font-size: 9px; opacity: 0.8; }
+      .hud-bottom-left .log-header { font-weight: bold; border-bottom: 1px solid rgba(0,255,255,0.3); padding-bottom: 5px; margin-bottom: 5px; }
+      .hud-log div { margin-top: 4px; animation: glitchText 0.2s infinite alternate; }
+      
+      /* Central Targeting Rings */
+      .targeting-ring {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        border: 1px dashed rgba(0, 255, 255, 0.2);
+        border-radius: 50%;
+        animation: rotateRing 20s linear infinite;
+      }
+      .ring-1 { width: 400px; height: 400px; border-style: dotted; animation-direction: reverse; animation-duration: 30s;}
+      .ring-2 { width: 300px; height: 300px; border-style: dashed; border-color: rgba(255, 50, 50, 0.15);}
+      
+      @keyframes rotateRing { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+      @keyframes glitchText { 0% { opacity: 0.8; } 100% { opacity: 1; transform: translateX(1px); } }
+
       #specimen-hud.danger {
-        color: rgba(255, 80, 0, 0.9);
-        text-shadow: 0 0 10px rgba(255, 80, 0, 0.8);
+        color: rgba(255, 50, 50, 0.9);
+        text-shadow: 0 0 15px rgba(255, 50, 50, 0.8);
       }
+      #specimen-hud.danger .hud-panel {
+        border-color: rgba(255, 50, 50, 0.4);
+        background: rgba(20, 0, 0, 0.5);
+      }
+      #specimen-hud.danger .hud-top-left { border-left-color: rgba(255, 50, 50, 0.9); }
+      #specimen-hud.danger .hud-status { color: #f00; text-shadow: 0 0 10px #f00; }
       
-      .hud-top-left { position: absolute; top: 30px; left: 30px; }
-      .hud-title { font-weight: bold; margin-bottom: 5px; font-size: 13px; letter-spacing: 4px; }
-      .hud-status { opacity: 0.8; }
-      
-      .hud-top-right { position: absolute; top: 30px; right: 30px; text-align: right; }
-      .hud-top-right div { margin-bottom: 5px; }
-      
-      .hud-bottom-left { position: absolute; bottom: 30px; left: 30px; opacity: 0.7; }
-      .hud-log div { margin-top: 4px; }
-      
-      /* Camera Reticles */
-      .hud-reticle { position: absolute; width: 25px; height: 25px; border: 1px solid currentColor; opacity: 0.5; transition: border-color 0.3s; }
-      .hud-reticle.top-left { top: 20px; left: 20px; border-right: none; border-bottom: none; }
-      .hud-reticle.top-right { top: 20px; right: 20px; border-left: none; border-bottom: none; }
-      .hud-reticle.bottom-left { bottom: 20px; left: 20px; border-right: none; border-top: none; }
-      .hud-reticle.bottom-right { bottom: 20px; right: 20px; border-left: none; border-top: none; }
     </style>
   </head>
   <body>
     <canvas id="canvas" aria-label="An interactive digital organism" role="img"></canvas>
     
-    <!-- THE BIG JUMP: SPECIMEN HUD -->
     <div id="specimen-hud">
-      <div class="hud-top-left">
-        <div class="hud-title">PROJECT: SPECIMEN</div>
-        <div id="hud-status" class="hud-status">CONTAINMENT STABLE</div>
+      <div class="scanlines"></div>
+      
+      <div class="targeting-ring ring-1"></div>
+      <div class="targeting-ring ring-2"></div>
+
+      <div class="hud-panel hud-top-left">
+        <div class="hud-title">SPECIMEN /// APEX</div>
+        <div id="hud-status" class="hud-status">CONTAINMENT BREACHED</div>
       </div>
-      <div class="hud-top-right">
-        <div id="hud-coords">POS: [0, 0]</div>
-        <div id="hud-bio" style="transition: opacity 0.2s">HRT: 60 BPM</div>
+      
+      <div class="hud-panel hud-top-right">
+        <div id="hud-level">MUTATION LEVEL: I</div>
+        <div id="hud-mass">BIOMASS: 0.0%</div>
+        <div id="hud-temperament">TEMP: NEUTRAL</div>
       </div>
-      <div class="hud-bottom-left">
-        <div id="hud-log" class="hud-log"></div>
+      
+      <div class="hud-panel hud-bottom-left">
+        <div class="log-header">SYSTEM LOG</div>
+        <div id="hud-log" class="hud-log">
+          <div>> INITIALIZING NEURAL UPLINK...</div>
+          <div>> SYNCING BIOMETRICS...</div>
+        </div>
       </div>
-      <!-- Reticles -->
-      <div class="hud-reticle top-left"></div>
-      <div class="hud-reticle top-right"></div>
-      <div class="hud-reticle bottom-left"></div>
-      <div class="hud-reticle bottom-right"></div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

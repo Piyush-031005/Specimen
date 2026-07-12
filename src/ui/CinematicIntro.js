@@ -2,8 +2,8 @@
  * SPECIMEN — CinematicIntro.js
  *
  * Handles the initial narrative sequence before the canvas is revealed.
- * Now features an elegant, thin typographic style, a generative WebGL/Canvas background,
- * and cinematic Web Audio API bass drops instead of TTS.
+ * Now features an elegant, thin typographic style, a generative WebGL/Canvas background
+ * drawing unimaginable organisms, and cinematic Web Audio API bass drops WITH Voiceover.
  */
 
 export class CinematicIntro {
@@ -60,8 +60,8 @@ export class CinematicIntro {
         this._textContainer.innerText = text;
         this._textContainer.style.opacity = '1';
         
-        // Play Cinematic Bass Drop
-        this._playCinematicImpact();
+        // Play Cinematic Bass Drop + Deep Voiceover
+        this._playCinematicImpact(text);
 
         // Wait, then fade out
         setTimeout(() => {
@@ -73,7 +73,7 @@ export class CinematicIntro {
             showNextLine();
           }, 1500); // Time text stays hidden between lines
           
-        }, 3500); // Time text stays visible
+        }, 4000); // Time text stays visible (slightly longer for audio)
       };
 
       // Set up the "Click to start" screen to bypass audio autoplay policies
@@ -86,9 +86,10 @@ export class CinematicIntro {
         this._textContainer.style.cursor = 'default';
         this._textContainer.style.opacity = '0';
         
-        // Initialize Web Audio API
+        // Initialize Web Audio API and Speech
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this._audioCtx = new AudioContext();
+        window.speechSynthesis.getVoices();
         
         this._startBackgroundAnimation();
         
@@ -128,8 +129,9 @@ export class CinematicIntro {
       left: '0',
       width: '100%',
       height: '100%',
-      opacity: '0.4', // Keep it subtle
-      pointerEvents: 'none'
+      opacity: '0.8', 
+      pointerEvents: 'none',
+      mixBlendMode: 'screen'
     });
     this._ctx = this._canvas.getContext('2d');
     this._overlay.appendChild(this._canvas);
@@ -157,67 +159,42 @@ export class CinematicIntro {
   }
 
   _startBackgroundAnimation() {
-    const nodes = [];
-    const numNodes = 60;
-    
-    for (let i = 0; i < numNodes; i++) {
-        nodes.push({
-            x: Math.random() * this._canvas.width,
-            y: Math.random() * this._canvas.height,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: (Math.random() - 0.5) * 0.5,
-            size: Math.random() * 2 + 1
-        });
-    }
-
     let time = 0;
     const render = () => {
-        time += 0.01;
-        this._ctx.fillStyle = 'rgba(5, 5, 5, 0.1)';
+        time += 0.005;
+        // Heavy fade effect for trails
+        this._ctx.fillStyle = 'rgba(5, 5, 5, 0.08)';
         this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
 
-        this._ctx.lineWidth = 0.5;
+        const cx = this._canvas.width / 2;
+        const cy = this._canvas.height / 2;
+
+        this._ctx.lineWidth = 1;
         
-        // Update and draw nodes
-        nodes.forEach(node => {
-            node.x += node.vx;
-            node.y += node.vy;
-
-            // Wrap around edges
-            if (node.x < 0) node.x = this._canvas.width;
-            if (node.x > this._canvas.width) node.x = 0;
-            if (node.y < 0) node.y = this._canvas.height;
-            if (node.y > this._canvas.height) node.y = 0;
-
+        // Draw 3 interwoven morphing organisms (Parametric Strange Attractors)
+        for (let j = 0; j < 3; j++) {
             this._ctx.beginPath();
-            this._ctx.fillStyle = `rgba(255, 50, 50, ${Math.sin(time + node.x) * 0.5 + 0.5})`;
-            this._ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
-            this._ctx.fill();
-        });
+            if (j === 0) this._ctx.strokeStyle = `rgba(255, 20, 50, 0.15)`;
+            else if (j === 1) this._ctx.strokeStyle = `rgba(20, 200, 255, 0.15)`;
+            else this._ctx.strokeStyle = `rgba(255, 255, 255, 0.05)`;
 
-        // Draw circuit-like connections (only orthogonal/diagonal lines)
-        for (let i = 0; i < numNodes; i++) {
-            for (let j = i + 1; j < numNodes; j++) {
-                const dx = nodes[i].x - nodes[j].x;
-                const dy = nodes[i].y - nodes[j].y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist < 150) {
-                    this._ctx.beginPath();
-                    this._ctx.strokeStyle = `rgba(200, 200, 255, ${0.15 * (1 - dist / 150)})`;
-                    this._ctx.moveTo(nodes[i].x, nodes[i].y);
-                    
-                    // Draw circuit-like right angles
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                        this._ctx.lineTo(nodes[j].x, nodes[i].y);
-                    } else {
-                        this._ctx.lineTo(nodes[i].x, nodes[j].y);
-                    }
-                    
-                    this._ctx.lineTo(nodes[j].x, nodes[j].y);
-                    this._ctx.stroke();
-                }
+            for (let i = 0; i < Math.PI * 2; i += 0.05) {
+                // Complex parametric equations for organic shifting shapes
+                const a = i * (3 + Math.sin(time * 0.5 + j));
+                const b = i * (4 + Math.cos(time * 0.3 - j));
+                
+                const radius = 250 + Math.sin(a * 5 + time) * 150 + Math.cos(b * 3 - time) * 80;
+                
+                // Add a swirling vortex effect
+                const swirlAngle = time * (j % 2 === 0 ? 0.2 : -0.2);
+                
+                const x = cx + Math.sin(a + swirlAngle) * radius * Math.cos(time * 0.1);
+                const y = cy + Math.cos(b + swirlAngle) * radius * Math.sin(time * 0.15);
+                
+                if (i === 0) this._ctx.moveTo(x, y);
+                else this._ctx.lineTo(x, y);
             }
+            this._ctx.stroke();
         }
 
         this._animationFrameId = requestAnimationFrame(render);
@@ -225,12 +202,23 @@ export class CinematicIntro {
     render();
   }
 
-  _playCinematicImpact() {
-    if (!this._audioCtx) return;
+  _playCinematicImpact(text) {
+    // 1. Play Deep Voiceover
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const deepVoice = voices.find(v => v.name.includes('Male') || v.name.includes('David') || v.name.includes('Mark')) || voices[0];
+    if (deepVoice) msg.voice = deepVoice;
+    msg.pitch = 0.1; // Extremely deep, Kratos-like
+    msg.rate = 0.7; // Slow and deliberate
+    msg.volume = 1.0;
+    window.speechSynthesis.speak(msg);
 
+    // 2. Play Web Audio Drums / Bass Drop
+    if (!this._audioCtx) return;
     const time = this._audioCtx.currentTime;
 
-    // 1. Massive Sub Bass Drop (Sine wave dropping in frequency)
+    // Massive Sub Bass Drop (Sine wave dropping in frequency)
     const subOsc = this._audioCtx.createOscillator();
     const subGain = this._audioCtx.createGain();
     subOsc.type = 'sine';
@@ -247,7 +235,7 @@ export class CinematicIntro {
     subOsc.start(time);
     subOsc.stop(time + 3.5);
 
-    // 2. Gritty Mid-Rumble (Sawtooth passing through a lowpass filter)
+    // Gritty Mid-Rumble (Sawtooth passing through a lowpass filter)
     const rumbleOsc = this._audioCtx.createOscillator();
     const rumbleGain = this._audioCtx.createGain();
     const filter = this._audioCtx.createBiquadFilter();
