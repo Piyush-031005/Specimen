@@ -2,15 +2,18 @@
  * SPECIMEN — CinematicIntro.js
  *
  * Handles the initial narrative sequence before the canvas is revealed.
- * Sets the tone of biological horror and hybrid mutation based on the user's vision.
- * Includes TTS Voiceover and flashing anaglyph biological hybrid images.
+ * Now features an elegant, thin typographic style, a generative WebGL/Canvas background,
+ * and cinematic Web Audio API bass drops instead of TTS.
  */
 
 export class CinematicIntro {
   constructor() {
     this._overlay = null;
     this._textContainer = null;
-    this._bgImage = null;
+    this._canvas = null;
+    this._ctx = null;
+    this._audioCtx = null;
+    this._animationFrameId = null;
   }
 
   /**
@@ -18,8 +21,6 @@ export class CinematicIntro {
    * @returns {Promise<void>} Resolves when the intro is complete and the canvas should be revealed.
    */
   async play() {
-    // Always play for hackathon presentation purposes
-    
     return new Promise((resolve) => {
       this._buildDOM();
 
@@ -33,39 +34,14 @@ export class CinematicIntro {
         "And it is starving."
       ];
 
-      // Match the generated images (hardcoded to the ones we copied)
-      const images = [
-        '/assets/lobster_hybrid_1783876754565.png',
-        '/assets/dragonfly_hybrid_1783876735856.png',
-        '/assets/spider_hybrid_1783876774985.png'
-      ];
-
       let currentLine = 0;
-      let currentImageIndex = 0;
-
-      const speakText = (text) => {
-        // Cancel any ongoing speech
-        window.speechSynthesis.cancel();
-        
-        const msg = new SpeechSynthesisUtterance(text);
-        
-        // Find a deep male voice if possible
-        const voices = window.speechSynthesis.getVoices();
-        const deepVoice = voices.find(v => v.name.includes('Male') || v.name.includes('David') || v.name.includes('Mark')) || voices[0];
-        if (deepVoice) msg.voice = deepVoice;
-        
-        msg.pitch = 0.1; // Extremely deep, Kratos-like
-        msg.rate = 0.7; // Slow and deliberate
-        msg.volume = 1.0;
-        
-        window.speechSynthesis.speak(msg);
-      };
 
       const showNextLine = () => {
         if (currentLine >= lines.length) {
           // Finish sequence
           this._textContainer.style.opacity = '0';
-          this._bgImage.style.opacity = '0';
+          if (this._animationFrameId) cancelAnimationFrame(this._animationFrameId);
+          
           setTimeout(() => {
             this._overlay.style.opacity = '0';
             setTimeout(() => {
@@ -84,22 +60,12 @@ export class CinematicIntro {
         this._textContainer.innerText = text;
         this._textContainer.style.opacity = '1';
         
-        // Flash image for certain lines
-        if (currentLine === 1 || currentLine === 3 || currentLine === 5) {
-          this._bgImage.style.backgroundImage = `url(${images[currentImageIndex]})`;
-          this._bgImage.style.opacity = '0.3'; // Subtle background flash
-          currentImageIndex++;
-        } else {
-          this._bgImage.style.opacity = '0';
-        }
-
-        // Play Voiceover
-        speakText(text);
+        // Play Cinematic Bass Drop
+        this._playCinematicImpact();
 
         // Wait, then fade out
         setTimeout(() => {
           this._textContainer.style.opacity = '0';
-          this._bgImage.style.opacity = '0';
           
           // Wait for fade out to complete before showing next line
           setTimeout(() => {
@@ -107,7 +73,7 @@ export class CinematicIntro {
             showNextLine();
           }, 1500); // Time text stays hidden between lines
           
-        }, 4000); // Time text stays visible (slightly longer for audio to finish)
+        }, 3500); // Time text stays visible
       };
 
       // Set up the "Click to start" screen to bypass audio autoplay policies
@@ -120,8 +86,11 @@ export class CinematicIntro {
         this._textContainer.style.cursor = 'default';
         this._textContainer.style.opacity = '0';
         
-        // Initialize speech synthesis voices (sometimes they need a nudge on first click)
-        window.speechSynthesis.getVoices();
+        // Initialize Web Audio API
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this._audioCtx = new AudioContext();
+        
+        this._startBackgroundAnimation();
         
         setTimeout(showNextLine, 1500);
       };
@@ -140,50 +109,166 @@ export class CinematicIntro {
       left: '0',
       width: '100vw',
       height: '100vh',
-      backgroundColor: '#000000',
+      backgroundColor: '#050505',
       zIndex: '9999', // Above HUD
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       transition: 'opacity 2s ease-in-out',
+      overflow: 'hidden'
     });
 
-    // Create background image container for flashes
-    this._bgImage = document.createElement('div');
-    Object.assign(this._bgImage.style, {
+    // Create Generative Background Canvas
+    this._canvas = document.createElement('canvas');
+    this._canvas.width = window.innerWidth;
+    this._canvas.height = window.innerHeight;
+    Object.assign(this._canvas.style, {
       position: 'absolute',
       top: '0',
       left: '0',
       width: '100%',
       height: '100%',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      opacity: '0',
-      transition: 'opacity 0.2s ease-out', // Fast flash
-      mixBlendMode: 'screen',
-      filter: 'contrast(1.5) grayscale(0.5)' // Gritty biological look
+      opacity: '0.4', // Keep it subtle
+      pointerEvents: 'none'
     });
-    this._overlay.appendChild(this._bgImage);
+    this._ctx = this._canvas.getContext('2d');
+    this._overlay.appendChild(this._canvas);
 
-    // Create text container
+    // Create elegant text container
     this._textContainer = document.createElement('div');
     Object.assign(this._textContainer.style, {
       position: 'relative',
       color: '#ffffff',
-      fontFamily: '"Impact", "Arial Black", sans-serif', // Huge AAA game font
-      fontSize: '48px',
-      letterSpacing: '2px',
+      fontFamily: '"Cinzel", "Didot", "Optima", "Times New Roman", serif', // Elegant, thin font
+      fontWeight: '300',
+      fontSize: '42px',
+      letterSpacing: '12px', // Wide, cinematic tracking
       textAlign: 'center',
-      maxWidth: '800px',
+      maxWidth: '1000px',
       padding: '40px',
       opacity: '0',
       transition: 'opacity 1.5s ease-in-out',
       textTransform: 'uppercase',
-      // Deep AAA game shadow and anaglyph text offset
-      textShadow: '3px 0px 0px rgba(255, 0, 0, 0.8), -3px 0px 0px rgba(0, 255, 255, 0.8), 0 0 20px rgba(0,0,0,1)'
+      textShadow: '0 0 15px rgba(255,255,255,0.2)' // Subtle, elegant glow
     });
 
     this._overlay.appendChild(this._textContainer);
     document.body.appendChild(this._overlay);
+  }
+
+  _startBackgroundAnimation() {
+    const nodes = [];
+    const numNodes = 60;
+    
+    for (let i = 0; i < numNodes; i++) {
+        nodes.push({
+            x: Math.random() * this._canvas.width,
+            y: Math.random() * this._canvas.height,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            size: Math.random() * 2 + 1
+        });
+    }
+
+    let time = 0;
+    const render = () => {
+        time += 0.01;
+        this._ctx.fillStyle = 'rgba(5, 5, 5, 0.1)';
+        this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
+
+        this._ctx.lineWidth = 0.5;
+        
+        // Update and draw nodes
+        nodes.forEach(node => {
+            node.x += node.vx;
+            node.y += node.vy;
+
+            // Wrap around edges
+            if (node.x < 0) node.x = this._canvas.width;
+            if (node.x > this._canvas.width) node.x = 0;
+            if (node.y < 0) node.y = this._canvas.height;
+            if (node.y > this._canvas.height) node.y = 0;
+
+            this._ctx.beginPath();
+            this._ctx.fillStyle = `rgba(255, 50, 50, ${Math.sin(time + node.x) * 0.5 + 0.5})`;
+            this._ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
+            this._ctx.fill();
+        });
+
+        // Draw circuit-like connections (only orthogonal/diagonal lines)
+        for (let i = 0; i < numNodes; i++) {
+            for (let j = i + 1; j < numNodes; j++) {
+                const dx = nodes[i].x - nodes[j].x;
+                const dy = nodes[i].y - nodes[j].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 150) {
+                    this._ctx.beginPath();
+                    this._ctx.strokeStyle = `rgba(200, 200, 255, ${0.15 * (1 - dist / 150)})`;
+                    this._ctx.moveTo(nodes[i].x, nodes[i].y);
+                    
+                    // Draw circuit-like right angles
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        this._ctx.lineTo(nodes[j].x, nodes[i].y);
+                    } else {
+                        this._ctx.lineTo(nodes[i].x, nodes[j].y);
+                    }
+                    
+                    this._ctx.lineTo(nodes[j].x, nodes[j].y);
+                    this._ctx.stroke();
+                }
+            }
+        }
+
+        this._animationFrameId = requestAnimationFrame(render);
+    };
+    render();
+  }
+
+  _playCinematicImpact() {
+    if (!this._audioCtx) return;
+
+    const time = this._audioCtx.currentTime;
+
+    // 1. Massive Sub Bass Drop (Sine wave dropping in frequency)
+    const subOsc = this._audioCtx.createOscillator();
+    const subGain = this._audioCtx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(60, time);
+    subOsc.frequency.exponentialRampToValueAtTime(10, time + 3.0);
+    
+    subGain.gain.setValueAtTime(0, time);
+    subGain.gain.linearRampToValueAtTime(1.0, time + 0.1);
+    subGain.gain.exponentialRampToValueAtTime(0.01, time + 3.5);
+    
+    subOsc.connect(subGain);
+    subGain.connect(this._audioCtx.destination);
+    
+    subOsc.start(time);
+    subOsc.stop(time + 3.5);
+
+    // 2. Gritty Mid-Rumble (Sawtooth passing through a lowpass filter)
+    const rumbleOsc = this._audioCtx.createOscillator();
+    const rumbleGain = this._audioCtx.createGain();
+    const filter = this._audioCtx.createBiquadFilter();
+    
+    rumbleOsc.type = 'sawtooth';
+    rumbleOsc.frequency.setValueAtTime(45, time);
+    rumbleOsc.frequency.linearRampToValueAtTime(30, time + 2.0);
+    
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(200, time);
+    filter.frequency.exponentialRampToValueAtTime(20, time + 2.5);
+    
+    rumbleGain.gain.setValueAtTime(0, time);
+    rumbleGain.gain.linearRampToValueAtTime(0.4, time + 0.05);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.01, time + 2.5);
+    
+    rumbleOsc.connect(filter);
+    filter.connect(rumbleGain);
+    rumbleGain.connect(this._audioCtx.destination);
+    
+    rumbleOsc.start(time);
+    rumbleOsc.stop(time + 2.5);
   }
 }

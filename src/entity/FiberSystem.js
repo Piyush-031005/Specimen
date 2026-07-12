@@ -982,41 +982,66 @@ export class FiberSystem {
     
     // Shift embryo color based on evolution & grapple
     if (this._evolutionLevel === 3) {
-       // Draw Apex Animal Core (Mandibles + 8 Eyes)
+       // Draw Cybernetic / Mechanical Core (Diamond Abdomen + Circuit Nodes)
        const eyecx = this._brainX + px;
        const eyecy = this._brainY + py;
        
-       // Draw 2 massive jagged mandibles
-       ctx.strokeStyle = `rgba(255, 30, 30, ${0.9 + arrivalBright})`;
-       ctx.lineWidth = 2.0 + this._brainArrivalPulse * 3;
+       // Draw sharp geometric diamond abdomen
+       ctx.fillStyle = `rgba(10, 10, 15, ${0.9 + arrivalBright})`;
+       ctx.strokeStyle = `rgba(0, 200, 255, ${0.8 + arrivalBright})`;
+       ctx.lineWidth = 1.5;
+       ctx.shadowColor = `rgba(0, 200, 255, 1.0)`;
+       ctx.shadowBlur = 10;
        
        ctx.beginPath();
-       ctx.moveTo(eyecx - 5, eyecy - 15);
-       ctx.lineTo(eyecx - 20, eyecy + 5);
-       ctx.lineTo(eyecx - 8, eyecy + 25);
+       ctx.moveTo(eyecx, eyecy - 25); // Top point
+       ctx.lineTo(eyecx + 20, eyecy);  // Right point
+       ctx.lineTo(eyecx, eyecy + 35); // Bottom point
+       ctx.lineTo(eyecx - 20, eyecy);  // Left point
+       ctx.closePath();
+       ctx.fill();
        ctx.stroke();
 
-       ctx.beginPath();
-       ctx.moveTo(eyecx + 5, eyecy - 15);
-       ctx.lineTo(eyecx + 20, eyecy + 5);
-       ctx.lineTo(eyecx + 8, eyecy + 25);
-       ctx.stroke();
-
-       // Draw 8 Eyes
-       ctx.fillStyle = `rgba(255, 20, 20, ${1.0 + arrivalBright})`;
+       // Draw internal glowing circuit core
+       ctx.fillStyle = `rgba(255, 20, 50, ${1.0 + arrivalBright})`;
        ctx.shadowColor = `rgba(255, 0, 0, 1.0)`;
-       ctx.shadowBlur = 15;
+       ctx.beginPath();
+       ctx.moveTo(eyecx, eyecy - 8);
+       ctx.lineTo(eyecx + 6, eyecy + 4);
+       ctx.lineTo(eyecx - 6, eyecy + 4);
+       ctx.closePath();
+       ctx.fill();
+
+       // Draw geometric cyber-mandibles
+       ctx.strokeStyle = `rgba(200, 200, 255, ${0.8 + arrivalBright})`;
+       ctx.lineWidth = 2.0;
        
-       const eyeAngles = [-0.6, -0.2, 0.2, 0.6, -0.8, -0.4, 0.4, 0.8];
-       const eyeDistances = [12, 10, 10, 12, 18, 16, 16, 18];
+       // Left Cyber-Mandible
+       ctx.beginPath();
+       ctx.moveTo(eyecx - 10, eyecy - 15);
+       ctx.lineTo(eyecx - 25, eyecy - 30);
+       ctx.lineTo(eyecx - 15, eyecy - 45);
+       ctx.stroke();
+
+       // Right Cyber-Mandible
+       ctx.beginPath();
+       ctx.moveTo(eyecx + 10, eyecy - 15);
+       ctx.lineTo(eyecx + 25, eyecy - 30);
+       ctx.lineTo(eyecx + 15, eyecy - 45);
+       ctx.stroke();
+
+       // Draw glowing cyber nodes
+       const nodeCoords = [
+           {x: -12, y: -5}, {x: 12, y: -5}, 
+           {x: -8, y: 15}, {x: 8, y: 15},
+           {x: 0, y: -18}
+       ];
        
-       eyeAngles.forEach((angle, idx) => {
-           const dist = eyeDistances[idx];
-           const ex = eyecx + Math.sin(angle) * dist;
-           const ey = eyecy - Math.cos(angle) * dist;
-           
+       ctx.fillStyle = `rgba(0, 255, 255, ${1.0 + arrivalBright})`;
+       ctx.shadowColor = `rgba(0, 255, 255, 1.0)`;
+       nodeCoords.forEach(coord => {
            ctx.beginPath();
-           ctx.arc(ex, ey, 2.5 + (this._brainArrivalPulse * 2.0), 0, Math.PI * 2);
+           ctx.arc(eyecx + coord.x, eyecy + coord.y, 2, 0, Math.PI * 2);
            ctx.fill();
        });
     } else {
