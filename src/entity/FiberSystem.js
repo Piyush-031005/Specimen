@@ -37,8 +37,11 @@ export class FiberSystem {
     this._brainArrivalPulse = 0;
     this._globalSignalDim = 0;
     this._recoilOvershoot = 0;
-    this._lastUnravelState = false;
     this._unravelStartTime = 0;
+    
+    // Level 3 Web Weaving
+    this._webs = [];
+    this._webTimer = 0;
 
     // We build the fibers around a generic center first
     // They will be translated during rendering to follow the brain
@@ -617,6 +620,19 @@ export class FiberSystem {
     
     // Global signal dimming: When a thought travels, the rest of the organism quiets down to increase contrast
     this._globalSignalDim = expDecay(this._globalSignalDim || 0, hasSensationSignal ? 0.25 : 0, 5.0, deltaSeconds);
+
+    // Level 3 Webbing Mechanics
+    if (this._evolutionLevel === 3) {
+        this._webTimer -= deltaSeconds;
+        if (this._webTimer <= 0 && this._webs.length < 15) {
+            this._webTimer = randomFloat(1.5, 3.5);
+            this._shootWeb();
+        }
+        for (let i = this._webs.length - 1; i >= 0; i--) {
+            this._webs[i].progress += 0.016 * 0.5; // Simulate life progress
+            if (this._webs[i].progress >= 1.0) this._webs.splice(i, 1);
+        }
+    }
   }
 
   /**
@@ -624,6 +640,30 @@ export class FiberSystem {
    */
   resetUnravel() {
     this._unravelProgress = 0;
+  }
+
+  /**
+   * Level 3 ability: Shoots a web to anchor to the screen bounds
+   */
+  _shootWeb() {
+      // Pick a random edge (0: top, 1: right, 2: bottom, 3: left)
+      const edge = Math.floor(Math.random() * 4);
+      let targetX, targetY;
+      
+      const w = this._coords.cssWidth;
+      const h = this._coords.cssHeight;
+      
+      if (edge === 0) { targetX = randomFloat(0, w); targetY = 0; }
+      else if (edge === 1) { targetX = w; targetY = randomFloat(0, h); }
+      else if (edge === 2) { targetX = randomFloat(0, w); targetY = h; }
+      else { targetX = 0; targetY = randomFloat(0, h); }
+      
+      this._webs.push({
+          x: targetX,
+          y: targetY,
+          progress: 0,
+          speed: randomFloat(2.0, 5.0)
+      });
   }
 
   /**
@@ -980,6 +1020,36 @@ export class FiberSystem {
        );
     }
     ctx.stroke();
+
+    // Draw Level 3 Web Anchors
+    if (this._evolutionLevel === 3 && this._webs.length > 0) {
+        ctx.globalCompositeOperation = 'screen';
+        const shiftX = (this._cursorX - cx) * 0.005 + 1.5;
+        
+        for (let w of this._webs) {
+            const startX = cx; // From the core
+            const startY = cy;
+            const endX = lerp(startX, w.x, w.progress);
+            const endY = lerp(startY, w.y, w.progress);
+            
+            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = w.progress * 0.6 * masterOpacity;
+            
+            // Red web thread
+            ctx.strokeStyle = `rgba(255, 20, 40, ${ctx.globalAlpha})`;
+            ctx.beginPath();
+            ctx.moveTo(startX + shiftX, startY);
+            ctx.lineTo(endX + shiftX, endY);
+            ctx.stroke();
+            
+            // Cyan web thread
+            ctx.strokeStyle = `rgba(20, 200, 255, ${ctx.globalAlpha * 0.8})`;
+            ctx.beginPath();
+            ctx.moveTo(startX - shiftX, startY);
+            ctx.lineTo(endX - shiftX, endY);
+            ctx.stroke();
+        }
+    }
     
     ctx.restore();
   }

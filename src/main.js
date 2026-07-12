@@ -24,6 +24,7 @@ import { AnimationScheduler } from './engine/AnimationScheduler.js';
 import { Entity } from './entity/Entity.js';
 import { PlanktonSystem } from './entity/PlanktonSystem.js';
 import { HUDSystem } from './ui/HUDSystem.js';
+import { CinematicIntro } from './ui/CinematicIntro.js';
 
 import { EntityHeartbeat } from './pattern/EntityHeartbeat.js';
 import { DisplacementWave } from './pattern/DisplacementWave.js';
@@ -60,6 +61,7 @@ const commWindow    = new CommunicationWindow(); // eslint-disable-line no-unuse
 const behavior      = new BehaviorEngine(memory);
 const audio         = new AudioEngine(memory);
 const hud           = new HUDSystem(); // HUD Overlay for cinematic effect
+const cinematicIntro = new CinematicIntro();
 const entity        = new Entity(coords, scheduler, memory);
 const plankton      = new PlanktonSystem(coords); // Added fluid background particles
 const customCursor  = new CustomCursor(coords);
@@ -152,16 +154,27 @@ window.addEventListener('beforeunload', () => {
 // 6. Start render loop — produces black screen at 60fps
 renderer.start();
 
-// 6. Entity intro — fades in over 2.4s (smootherstep) after 600ms silence
-entity.init();
+// Hide HUD initially
+const hudElement = document.getElementById('specimen-hud');
+if (hudElement && !sessionStorage.getItem('specimen_intro_played')) {
+  hudElement.style.opacity = '0';
+  hudElement.style.transition = 'opacity 2s ease-in-out';
+}
 
-// 7. Pulse generator starts (first pulse after TIMING.FIRST_PULSE_DELAY_MS)
-heartbeat.start();
+cinematicIntro.play().then(() => {
+  if (hudElement) hudElement.style.opacity = '1';
 
-// The Impossible Observation (Scene 1): Prove reality exists before interaction
-setTimeout(() => {
-  EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
-}, 3000);
+  // 6. Entity intro — fades in over 2.4s (smootherstep) after 600ms silence
+  entity.init();
+
+  // 7. Pulse generator starts (first pulse after TIMING.FIRST_PULSE_DELAY_MS)
+  heartbeat.start();
+
+  // The Impossible Observation (Scene 1): Prove reality exists before interaction
+  setTimeout(() => {
+    EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
+  }, 3000);
+});
 
 // 8. Removed HintLayer
 
