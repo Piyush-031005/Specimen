@@ -89,10 +89,10 @@ export class Entity {
     /** @type {{ wx: number, wy: number }} Smoothed cursor lean */
     this._cursorLean  = { wx: 0, wy: 0 };
     
-    /** @type {{ wx: number, wy: number }} Intent focus (very slow) */
     this._intentFocus = { wx: 0, wy: 0 };
 
     this._lastInputTime = null;
+    this._eatCooldown = 0;
 
     // ─── Subscriptions ────────────────────────────────────────────────────
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
@@ -238,11 +238,16 @@ export class Entity {
            this._state.pursuitY += (pdy / pDist) * speed * deltaSeconds;
        }
        
+       // Decrement cooldown
+       if (this._eatCooldown > 0) {
+           this._eatCooldown -= deltaSeconds;
+       }
+       
        // Collision Detection (EATEN)
        // Core size scales with evolution level (World units radius)
        const hitRadius = this._state.evolutionLevel === 1 ? 0.05 : (this._state.evolutionLevel === 2 ? 0.1 : 0.15);
-       // Only eat if the user is actively clicking (grappling) the cursor
-       if (pDist < hitRadius && this._state.masterOpacity > 0.8 && this._state.isGrappling) {
+       // Only eat if the user is actively clicking (grappling) the cursor and cooldown is 0
+       if (pDist < hitRadius && this._state.masterOpacity > 0.8 && this._state.isGrappling && this._eatCooldown <= 0) {
            this._eatCursor();
        }
     }
