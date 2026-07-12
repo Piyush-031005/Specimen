@@ -187,8 +187,11 @@ export class DisplacementWave {
       const color = '245, 240, 232'; 
       const gradient = ctx.createRadialGradient(ring.cx, ring.cy, innerRadius, ring.cx, ring.cy, currentRadius);
       
+      // Art Direction: The halo was dominating the organism. Reduce it by 98% so it's a very subtle background ripple.
+      const reducedOpacity = opacity * 0.02;
+      
       gradient.addColorStop(0, `rgba(${color}, 0)`);
-      gradient.addColorStop(0.7, `rgba(${color}, ${opacity * 0.4})`); // Very subtle core
+      gradient.addColorStop(0.7, `rgba(${color}, ${reducedOpacity})`);
       gradient.addColorStop(1, `rgba(${color}, 0)`);
 
       ctx.fillStyle = gradient;

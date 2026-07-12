@@ -31,8 +31,14 @@ export class FiberSystem {
     this._glowCursorY = coords.center.y;
     
     // Signal Propagation
+    this._signals = [];
     this._isGrappling = false;
     this._evolutionLevel = 1;
+    this._brainArrivalPulse = 0;
+    this._globalSignalDim = 0;
+    this._recoilOvershoot = 0;
+    this._lastUnravelState = false;
+    this._unravelStartTime = 0;
 
     // We build the fibers around a generic center first
     // They will be translated during rendering to follow the brain
@@ -46,11 +52,8 @@ export class FiberSystem {
   triggerMutation(level) {
       this._evolutionLevel = level;
       
-      // Explosion effect - instantly reset unravel
-      this._unravelProgress = 0;
-      this._recoilOvershoot = 1.0;
-      
-      // Regenerate the anatomy
+      // Keep _unravelProgress at 1.0 - organism stays visible during mutation
+      // _generateFibers() will rebuild the anatomy for the new level
       this._generateFibers();
   }
 
@@ -62,117 +65,206 @@ export class FiberSystem {
   _generateFibers() {
     this._fibers = [];
     
-    // Scale fiber count based on evolution
-    let primaryCount = 4;
-    let secondaryCount = 8;
-    let ambientCount = 10;
-    
-    if (this._evolutionLevel === 2) {
-        primaryCount = 8;
-        secondaryCount = 16;
-        ambientCount = 20;
-    } else if (this._evolutionLevel === 3) {
-        primaryCount = 12;
-        secondaryCount = 30;
-        ambientCount = 40;
-    }
-    
-    this._numFibers = primaryCount + secondaryCount + ambientCount;
-
     const cx = this._coords.center.x;
     const cy = this._coords.center.y;
-    // Core scales massively at Level 3
-    const baseW = this._coords.cssWidth * (this._evolutionLevel === 3 ? 0.6 : (this._evolutionLevel === 2 ? 0.4 : 0.25));
-    const baseH = this._coords.cssHeight * (this._evolutionLevel === 3 ? 0.6 : (this._evolutionLevel === 2 ? 0.4 : 0.25));
     
-    // Helper to add a fiber
-    const addFiber = (isEmergentHero, hierarchyLevel) => {
-      let radiusMod;
-      let baseOpacity;
-      let lineWidth;
-      
-      if (hierarchyLevel === 'primary') {
-        radiusMod = 1.3;
-        baseOpacity = randomFloat(0.1, 0.2);
-        lineWidth = randomFloat(0.8, 1.2);
-      } else if (hierarchyLevel === 'secondary') {
-        radiusMod = 0.8;
-        baseOpacity = randomFloat(0.05, 0.1);
-        lineWidth = randomFloat(0.4, 0.6);
-      } else {
-        radiusMod = 0.4;
-        baseOpacity = randomFloat(0.02, 0.05);
-        lineWidth = randomFloat(0.2, 0.3);
-      }
-      
-      // Organic radial distribution (bias horizontally to feel like an eye/brain rather than a perfect circle)
-      const angle = randomFloat(0, Math.PI * 2);
-      
-      // Reach radius scales with evolution
-      const reachMod = this._evolutionLevel === 3 ? 2.5 : (this._evolutionLevel === 2 ? 1.5 : 1.0);
-      const reach = isEmergentHero ? 1.2 : randomFloat(0.4, 1.0);
-      
-      const startX = cx + Math.cos(angle) * 3;
-      const startY = cy + Math.sin(angle) * 3;
-      
-      // Fibers reach outward to the periphery
-      const endX = cx + Math.cos(angle) * (baseW * reach * reachMod);
-      const endY = cy + Math.sin(angle) * (baseH * reach * reachMod);
-      
-      // The control point gives the curve its biological sweep. 
-      const midX = (startX + endX) / 2;
-      const midY = (startY + endY) / 2;
-      const normalX = -Math.sin(angle);
-      const normalY = Math.cos(angle);
-      
-      // Primary branches bow less (more direct), tissue bows wildly (more tangled)
-      const bowMultiplier = hierarchyLevel === 'primary' ? 0.3 : 0.8;
-      const bowMagnitude = randomFloat(-baseW * 0.1, baseW * 0.1) * radiusMod * bowMultiplier;
-      
-      // We store the offset relative to cx, cy for the update physics engine
-      const absoluteCpX = midX + normalX * bowMagnitude;
-      const absoluteCpY = midY + normalY * bowMagnitude;
-      
-      // Calculate angular sorting for membrane generation
-      const renderAngle = Math.atan2(endY - cy, endX - cx);
+    // helper for pushing fiber data
+    const pushFiber = (startX, startY, endX, endY, absCpX, absCpY, angle, isHero, hierarchy, radiusMod, baseW) => {
+        let lineWidth = hierarchy === 'primary' ? randomFloat(1.5, 2.5) : (hierarchy === 'secondary' ? randomFloat(0.4, 0.8) : randomFloat(0.1, 0.3));
+        let baseOpacity = hierarchy === 'primary' ? randomFloat(0.3, 0.5) : (hierarchy === 'secondary' ? randomFloat(0.1, 0.2) : randomFloat(0.02, 0.05));
+        
+        this._fibers.push({
+            tStartX: startX,
+            tStartY: startY,
+            tEndX: endX,
+            tEndY: endY,
+            angle: Math.atan2(endY - cy, endX - cx),
+            isEmergentHero: isHero,
+            hierarchyLevel: hierarchy,
+            lineWidth,
+            baseOpacity,
+            z: randomFloat(-1.0, 1.0),
+            isDeepRed: randomFloat(0, 1) < (this._evolutionLevel === 3 ? 0.35 : 0.08),
+            cpOffsetX: absCpX - cx,
+            cpOffsetY: absCpY - cy,
+            phase: randomFloat(0, Math.PI * 2),
+            speed: randomFloat(0.5, 2.0),
+            currStartX: cx, currStartY: cy, currEndX: cx, currEndY: cy, currCpX: cx, currCpY: cy,
+            memoryTrace: 0, synapticGlow: 0, phantomTwitchTimer: 0, phantomTwitchX: 0,
+            lastSignalTime: 0
+        });
+    };
 
-      this._fibers.push({
-        tStartX: startX,
-        tStartY: startY,
-        tEndX: endX,
-        tEndY: endY,
-        angle: renderAngle,
+    // LEVEL 3: THE APEX PREDATOR (GIANT SPIDER MORPHOLOGY)
+    if (this._evolutionLevel === 3) {
+        // ═══ LEVEL 3: MECHA-SPIDER APEX PREDATOR ═══
+        // Inspired by mechanical spider concept art:
+        //   - 8 long articulated legs with sharp knee joints
+        //   - Central body mass with abdomen
+        //   - Circuit-like internal webbing
+        //   - The legs SPAN the screen
         
-        isEmergentHero,
-        hierarchyLevel,
-        lineWidth,
-        baseOpacity,
-        z: randomFloat(-1.0, 1.0), // Z-depth for parallax
-        isDeepRed: randomFloat(0, 1) < (this._evolutionLevel === 3 ? 0.25 : 0.08), // More deep red veins in Level 3
+        const legReach = Math.min(this._coords.cssWidth, this._coords.cssHeight) * 0.42;
         
-        // We store the offset relative to cx, cy for the update physics engine
-        cpOffsetX: absoluteCpX - cx,
-        cpOffsetY: absoluteCpY - cy,
+        // 8 Symmetrical spider legs (4 per side, evenly spaced)
+        const legAngles = [
+            -Math.PI * 0.15, -Math.PI * 0.35, -Math.PI * 0.55, -Math.PI * 0.75, // Right side (angled down-right to up-right)
+             Math.PI * 0.15,  Math.PI * 0.35,  Math.PI * 0.55,  Math.PI * 0.75  // Left side (mirrored)
+        ];
         
-        phase: randomFloat(0, Math.PI * 2),
-        speed: randomFloat(0.5, 2.0),
+        // Each leg is TWO segments: shoulder→knee, knee→foot
+        // We use bundles of parallel lines (hatching) for a dense, illustrative look.
+        for (let i = 0; i < 8; i++) {
+            const angle = legAngles[i];
+            const isRight = i < 4;
+            
+            // Shoulder (near body)
+            const shoulderX = cx + Math.cos(angle) * 15;
+            const shoulderY = cy + Math.sin(angle) * 15;
+            
+            // Knee
+            const kneeReach = legReach * 0.45;
+            const kneeX = cx + Math.cos(angle) * kneeReach;
+            const kneeY = cy + Math.sin(angle) * kneeReach;
+            
+            // Foot
+            const footX = cx + Math.cos(angle) * legReach;
+            const footY = cy + Math.sin(angle) * legReach;
+            
+            const perpX = -Math.sin(angle);
+            const perpY = Math.cos(angle);
+            
+            // Generate 4 parallel hatched lines for each leg segment
+            for (let hatch = -1.5; hatch <= 1.5; hatch += 1.0) {
+                const hatchOffset = hatch * 4.0; // Distance between parallel lines
+                
+                // Upper leg
+                const upperMidX = (shoulderX + kneeX) / 2;
+                const upperMidY = (shoulderY + kneeY) / 2;
+                const upperBow = (isRight ? -1 : 1) * legReach * 0.12;
+                
+                pushFiber(
+                    shoulderX + perpX * hatchOffset * 0.3, shoulderY + perpY * hatchOffset * 0.3,
+                    kneeX + perpX * hatchOffset, kneeY + perpY * hatchOffset,
+                    upperMidX + perpX * (upperBow + hatchOffset), upperMidY + perpY * (upperBow + hatchOffset),
+                    angle, true, 'primary', 1.0, legReach
+                );
+                
+                // Lower leg
+                const lowerMidX = (kneeX + footX) / 2;
+                const lowerMidY = (kneeY + footY) / 2;
+                const lowerBow = (isRight ? 1 : -1) * legReach * 0.18;
+                
+                pushFiber(
+                    kneeX + perpX * hatchOffset, kneeY + perpY * hatchOffset,
+                    footX + perpX * hatchOffset * 0.1, footY + perpY * hatchOffset * 0.1, // Taper at the foot
+                    lowerMidX + perpX * (lowerBow + hatchOffset), lowerMidY + perpY * (lowerBow + hatchOffset),
+                    angle, true, 'primary', 1.0, legReach
+                );
+            }
+        }
         
-        // Dynamic state
-        currStartX: cx,
-        currStartY: cy,
-        currEndX: cx,
-        currEndY: cy,
-        currCpX: cx,
-        currCpY: cy,
+        // Central body mass — dense radial fibers forming the "thorax"
+        const bodyRadius = legReach * 0.15;
+        for (let i = 0; i < 40; i++) {
+            const angle = (Math.PI * 2 / 40) * i;
+            const startX = cx;
+            const startY = cy;
+            const endX = cx + Math.cos(angle) * bodyRadius;
+            const endY = cy + Math.sin(angle) * bodyRadius;
+            const cpX = (startX + endX) / 2 + randomFloat(-15, 15);
+            const cpY = (startY + endY) / 2 + randomFloat(-15, 15);
+            pushFiber(startX, startY, endX, endY, cpX, cpY, angle, false, 'secondary', 1.0, bodyRadius);
+        }
         
-        memoryTrace: 0,
-        synapticGlow: 0,
-        phantomTwitchTimer: 0,
-        phantomTwitchX: 0
-      });
+        // Circuit-board webbing between legs (connecting adjacent leg joints)
+        for (let i = 0; i < 8; i++) {
+            const a1 = legAngles[i];
+            const a2 = legAngles[(i + 1) % 8];
+            for (let j = 0; j < 3; j++) {
+                const r1 = legReach * randomFloat(0.2, 0.7);
+                const r2 = legReach * randomFloat(0.2, 0.7);
+                const x1 = cx + Math.cos(a1) * r1;
+                const y1 = cy + Math.sin(a1) * r1;
+                const x2 = cx + Math.cos(a2) * r2;
+                const y2 = cy + Math.sin(a2) * r2;
+                pushFiber(x1, y1, x2, y2, cx, cy, (a1 + a2) / 2, false, 'tertiary', 0.3, legReach);
+            }
+        }
+        
+        // Ambient nerve strands radiating from body (much higher quantity)
+        for (let i = 0; i < 40; i++) {
+            const angle = randomFloat(0, Math.PI * 2);
+            const reach = randomFloat(0.15, 0.45);
+            const endX = cx + Math.cos(angle) * (legReach * reach);
+            const endY = cy + Math.sin(angle) * (legReach * reach);
+            pushFiber(cx, cy, endX, endY, endX + randomFloat(-25, 25), endY + randomFloat(-25, 25), angle, false, 'tertiary', 0.2, legReach);
+        }
+        
+        this._numFibers = this._fibers.length;
+        return;
     }
     
-    // Sort fibers by angle so membrane webbing connects adjacent limbs smoothly, not across the whole organism
+    // LEVEL 2: STRETCHING WILD BRANCHES
+    if (this._evolutionLevel === 2) {
+        this._numFibers = 12 + 20; // 12 reaching, 20 ambient
+        const baseW = this._coords.cssWidth * 0.25; // Stretches far
+        const baseH = this._coords.cssHeight * 0.25;
+        
+        for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 / 12) * i + randomFloat(-0.2, 0.2);
+            const startX = cx + Math.cos(angle) * 10;
+            const startY = cy + Math.sin(angle) * 10;
+            // Stretch wildly and asymmetrically
+            const endX = cx + Math.cos(angle) * baseW * randomFloat(0.8, 1.6);
+            const endY = cy + Math.sin(angle) * baseH * randomFloat(0.8, 1.6);
+            
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const normalX = -Math.sin(angle);
+            const normalY = Math.cos(angle);
+            const bendMag = baseW * 0.4 * randomFloat(-1, 1); // chaotic curves
+            
+            const cpX = midX + normalX * bendMag;
+            const cpY = midY + normalY * bendMag;
+            
+            pushFiber(startX, startY, endX, endY, cpX, cpY, angle, true, 'primary', 1.0, baseW);
+        }
+        for (let i = 0; i < 20; i++) {
+            const angle = randomFloat(0, Math.PI * 2);
+            const reach = randomFloat(0.3, 0.9);
+            const endX = cx + Math.cos(angle) * baseW * reach;
+            const endY = cy + Math.sin(angle) * baseH * reach;
+            const cpX = (cx + endX) / 2 + randomFloat(-20, 20);
+            const cpY = (cy + endY) / 2 + randomFloat(-20, 20);
+            pushFiber(cx, cy, endX, endY, cpX, cpY, angle, false, 'secondary', 0.8, baseW);
+        }
+        return;
+    }
+    
+    // LEVEL 1: TINY GLOWING SEED/NODE
+    this._numFibers = 5 + 15; // 5 primary, 15 ambient
+    const baseW = this._coords.cssWidth * 0.05; // Extremely small core
+    const baseH = this._coords.cssHeight * 0.05;
+    
+    for (let i = 0; i < 5; i++) {
+        const angle = (Math.PI * 2 / 5) * i;
+        const startX = cx; const startY = cy;
+        const endX = cx + Math.cos(angle) * baseW;
+        const endY = cy + Math.sin(angle) * baseH;
+        const cpX = (startX + endX) / 2 + randomFloat(-10, 10);
+        const cpY = (startY + endY) / 2 + randomFloat(-10, 10);
+        pushFiber(startX, startY, endX, endY, cpX, cpY, angle, true, 'primary', 1.0, baseW);
+    }
+    for (let i = 0; i < 15; i++) {
+        const angle = randomFloat(0, Math.PI * 2);
+        const reach = randomFloat(0.2, 1.2); // some short hairs
+        const endX = cx + Math.cos(angle) * baseW * reach;
+        const endY = cy + Math.sin(angle) * baseH * reach;
+        pushFiber(cx, cy, endX, endY, cx, cy, angle, false, 'tertiary', 0.5, baseW);
+    }
+    
+    // Sort fibers by angle for Level 1 so rendering doesn't flicker oddly
     this._fibers.sort((a, b) => a.angle - b.angle);
   }
 
@@ -213,6 +305,10 @@ export class FiberSystem {
    */
   update(deltaSeconds, isUnraveled, targetCpX, targetCpY, behaviorState, isCursorStill, isReturningVisitor, pluckPhase, introState, temperament = 0.0, isGrappling = false) {
     this._isGrappling = isGrappling;
+    // FORCE: Always fully unraveled - bypass intro animation
+    this._unravelProgress = 1.0;
+    isUnraveled = true;
+    
     // Track cursor for render. Fallback to center to prevent NaN if undefined.
     this._cursorX = targetCpX !== undefined ? targetCpX : this._coords.center.x;
     this._cursorY = targetCpY !== undefined ? targetCpY : this._coords.center.y;
@@ -222,7 +318,7 @@ export class FiberSystem {
     this._glowCursorY = expDecay(this._glowCursorY, this._cursorY, 10.0, deltaSeconds);
     
     // Determine target progress
-    let targetProgress = isUnraveled ? 1.0 : 0.0;
+    let targetProgress = 1.0; // Always fully unraveled
     
     // Spring speed config
     let globalSpringSpeed = 5.0; // Slow retraction by default
@@ -246,12 +342,14 @@ export class FiberSystem {
       globalSpringSpeed = 10.0; // Settling velocity
     }
 
-    if (pluckPhase === 'tension' || pluckPhase === 'freeze') {
-      targetProgress = 0.0; // Do not unravel yet!
-      globalSpringSpeed = 30.0;
-    }
+    // DISABLED: pluckPhase was resetting unravelProgress to 0, making the organism collapse
+    // if (pluckPhase === 'tension' || pluckPhase === 'freeze') {
+    //   targetProgress = 0.0;
+    //   globalSpringSpeed = 30.0;
+    // }
 
-    this._unravelProgress = expDecay(this._unravelProgress, targetProgress, globalSpringSpeed, deltaSeconds);
+    // DISABLED: expDecay was fighting the forced 1.0 and pushing it back to 0
+    // this._unravelProgress = expDecay(this._unravelProgress, targetProgress, globalSpringSpeed, deltaSeconds);
     
     const h = this._coords.cssHeight;
     const cx = this._coords.center.x;
@@ -298,13 +396,12 @@ export class FiberSystem {
             f.phantomTwitchTimer -= deltaSeconds;
          } else {
             // Read tension at this fiber's current control point
-            const pnx = f.currCpX / this._coords.cssWidth;
-            const pny = f.currCpY / this._coords.cssHeight;
-            const tension = this._memory.getHistoricalTension(pnx, pny);
+            // getHistoricalTension doesn't exist yet, so we default to 0 to prevent crashes
+            const tension = 0;
             
             if (tension > 0.05) {
-               // Rare probability per fiber
-               if (Math.random() < 0.00005 * tension) {
+               // High tension memory - twitch
+               if (Math.random() < 0.0005 * tension) {
                   f.phantomTwitchTimer = randomFloat(0.3, 0.8);
                   f.phantomTwitchX = (Math.random() - 0.5) * 60.0; // Sudden violent jerk
                   
@@ -360,8 +457,8 @@ export class FiberSystem {
       // Target anchor points based on unravel progress and tension
       const targetStartX = lerp(cx, lerp(this._brainX, f.tStartX, tensionMod), this._unravelProgress) + parallaxX;
       const targetStartY = lerp(baseStartY, lerp(this._brainY, f.tStartY, tensionMod), this._unravelProgress) + parallaxY;
-      const targetEndX = lerp(cx, lerp(cx, f.tEndX, tensionMod), this._unravelProgress) + parallaxX;
-      const targetEndY = lerp(baseEndY, lerp(cy, f.tEndY, tensionMod), this._unravelProgress) + parallaxY;
+      const targetEndX = lerp(cx, lerp(this._brainX, f.tEndX, tensionMod), this._unravelProgress) + parallaxX;
+      const targetEndY = lerp(baseEndY, lerp(this._brainY, f.tEndY, tensionMod), this._unravelProgress) + parallaxY;
       
       f.currStartX = targetStartX + (this._unravelProgress === 0 ? globalVibrationX : 0);
       f.currStartY = targetStartY;
@@ -385,10 +482,10 @@ export class FiberSystem {
       f.synapticGlow = expDecay(f.synapticGlow, targetGlow, decaySpeed, deltaSeconds);
       
       // Signal Propagation: Sensation travels from noticed synapse TO brain
-      const time = performance.now() * 0.001;
+      const nowSec = performance.now() * 0.001;
       if (f.synapticGlow > 0.5 && f.isEmergentHero && isUnraveled) {
-         if (time - f.lastSignalTime > 2.0) { // Max one signal every 2s per fiber
-            f.lastSignalTime = time;
+         if (nowSec - f.lastSignalTime > 2.0) { // Max one signal every 2s per fiber
+            f.lastSignalTime = nowSec;
             this._signals.push({
                fiberIndex: i,
                progress: 1.0, // Start at synapse
@@ -412,8 +509,9 @@ export class FiberSystem {
       
       // Intrusive Cursor: The user is trespassing. Fibers bend OUT OF THE WAY to accommodate the intrusion.
       // We calculate distance from the unraveled control point to the cursor.
-      let unraveledCpX = this._brainX + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * this._recoilOvershoot);
-      let unraveledCpY = this._brainY + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * this._recoilOvershoot);
+      // Use the actual target start point so complex multi-joint structures (like the spider) hold together.
+      let unraveledCpX = targetStartX + (f.cpOffsetX * tensionMod) + (f.cpOffsetX * this._recoilOvershoot);
+      let unraveledCpY = targetStartY + (f.cpOffsetY * tensionMod) + (f.cpOffsetY * this._recoilOvershoot);
       
       if (isUnraveled && pluckPhase !== 'freeze') {
         const dx = unraveledCpX - finalTargetCpX;
@@ -437,12 +535,12 @@ export class FiberSystem {
       }
       
       // Editor's Cut: Organic metabolic breathing with asymmetric shifting center of gravity.
-      let breath = this._calculateMetabolicBreath(time, f.speed, f.phase) * 8 * this._unravelProgress;
+      let breath = this._calculateMetabolicBreath(nowSec, f.speed, f.phase) * 8 * this._unravelProgress;
       
       // Calculate a drifting Center of Gravity for this fiber's breath
       // Different fibers have slightly different sensitivities to the drift to create mass asymmetry
-      const cgDriftX = Math.sin(time * 0.3 + f.phase) * 80;
-      const cgDriftY = Math.cos(time * 0.4 + f.phase) * 80;
+      const cgDriftX = Math.sin(nowSec * 0.3 + f.phase) * 80;
+      const cgDriftY = Math.cos(nowSec * 0.4 + f.phase) * 80;
       const cgX = cx + cgDriftX;
       const cgY = cy + cgDriftY;
       
@@ -466,8 +564,8 @@ export class FiberSystem {
       }
       
       // THE BIG JUMP: Tentacle Wriggle (Aquatic, alien writhing)
-      let wriggleX = Math.cos(time * f.speed * 2.0 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
-      let wriggleY = Math.sin(time * f.speed * 2.5 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      let wriggleX = Math.cos(nowSec * f.speed * 2.0 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
+      let wriggleY = Math.sin(nowSec * f.speed * 2.5 + f.phase) * (f.hierarchyLevel === 'tissue' ? 30 : 12);
       
       if (this._isGrappling) {
           wriggleX *= 3.0; // Violent thrashing
@@ -534,130 +632,133 @@ export class FiberSystem {
   render(ctx, masterOpacity, cx, cy, introState, temperament = 0.0, standoffIntensity = 0, standoffContext = null) {
     if (masterOpacity <= 0.001) return;
 
-    if (introState === 'hiding') {
-      ctx.save();
-      ctx.globalAlpha = 0.05 * masterOpacity; // Slightly more visible
-      ctx.fillStyle = COLORS.WARM_WHITE;
-      
-      const shimmerT = performance.now() * 0.002;
-      for (let i = 0; i < 3; i++) {
-         const nx = cx + (Math.sin(shimmerT * (i + 1) * 1.3) * 10);
-         const ny = cy + (Math.cos(shimmerT * (i + 2) * 1.7) * 10);
-         
-         ctx.beginPath();
-         ctx.arc(nx, ny, 1.5, 0, Math.PI * 2);
-         ctx.fill();
-      }
-      ctx.restore();
-      return; 
-    }
+    // FORCE: Always fully unraveled - bypass all intro animation guards
+    this._unravelProgress = 1.0;
 
     ctx.save();
-    
-    // PREMIUM FIBER RENDERING
-    // Remove screen blending for crispness, use normal alpha blending with high contrast
     ctx.globalCompositeOperation = 'source-over'; 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    
-    // When not unraveled (The single resting line)
-    if (this._unravelProgress === 0) {
-      const base = this._fibers[0];
-      ctx.globalAlpha = masterOpacity;
-      ctx.lineWidth = 2.0;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 1.0)';
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
-      ctx.shadowBlur = 12;
-      
-      ctx.beginPath();
-      ctx.moveTo(base.currStartX, base.currStartY);
-      ctx.quadraticCurveTo(base.currCpX, base.currCpY, base.currEndX, base.currEndY);
-      ctx.stroke();
-      
-      // Central focal point
-      ctx.beginPath();
-      ctx.fillStyle = '#ffffff';
-      ctx.arc(base.currCpX, base.currCpY, 3, 0, Math.PI * 2);
-      ctx.fill();
-      
-      ctx.restore();
-      return;
-    }
 
     // UNRAVELED NEURAL ORGANISM (Readability Polish)
     ctx.shadowBlur = 0; // Disable shadow for extreme sharpness
     
     // Dim the entire organism slightly when a thought travels to guide the eye
     const contrastMasterOpacity = masterOpacity * (1.0 - (this._globalSignalDim || 0));
-    
+
     // Draw Fibers
     for (let i = 0; i < this._numFibers; i++) {
       const f = this._fibers[i];
-      // Reduce baseline opacity to create negative space, but make heroes extremely sharp
-      let opacity = f.baseOpacity * contrastMasterOpacity * (0.05 + this._unravelProgress * 0.95);
-      let lineWidthMod = 1.0;
-        
-      if (f.isEmergentHero) {
-         opacity = 0.8 * contrastMasterOpacity; // Sharp contrast
-         lineWidthMod = 2.0; 
-      }
       
-      // Memory Trace: Permanently strengthen paths that have been interacted with
-      if (f.memoryTrace > 0.01) {
-         opacity = Math.min(1.0, opacity + (f.memoryTrace * 0.4 * contrastMasterOpacity));
-         lineWidthMod += f.memoryTrace * 0.8;
-      }
-      
-      // Add Synaptic Glow (Bioluminescent Cyan/Blue when active)
-      opacity = Math.min(1.0, opacity + (f.synapticGlow * 0.8 * contrastMasterOpacity));
-      if (f.synapticGlow > 0.1) {
-         lineWidthMod += f.synapticGlow * 1.5;
-      }
-
-      ctx.globalAlpha = opacity;
-      ctx.lineWidth = f.lineWidth * lineWidthMod;
-      
-      // Bioluminescence, Deep Red Background, and Evolution/Grappling Warning
       let r = 255, g = 255, b = 255;
+      let opacity = 0.6;
+      let lineWidth = 0.8; // Thin elegant default
       
+      if (f.isEmergentHero) {
+         lineWidth = 1.2; // Primary fibers slightly thicker
+         opacity = 0.9;
+      }
+      
+      if (this._evolutionLevel === 2) {
+         r = 255; g = 180; b = 0; // Gold
+         lineWidth *= 1.3;
+      } else if (this._evolutionLevel === 3) {
+         // Mecha-spider: thin sharp crimson lines with glow
+         if (f.hierarchyLevel === 'primary') {
+            r = 220; g = 20; b = 40;
+            lineWidth = 1.5; // Thin but visible legs
+            opacity = 1.0;
+         } else if (f.hierarchyLevel === 'secondary') {
+            r = 180; g = 0; b = 20; // Darker body mass
+            lineWidth = 0.8;
+            opacity = 0.7;
+         } else {
+            r = 100; g = 0; b = 15; // Very faint circuit webbing
+            lineWidth = 0.3;
+            opacity = 0.4;
+         }
+      }
+      
+      // Synapse glow override
+      if (f.synapticGlow > 0.1) {
+         opacity = Math.min(1.0, opacity + f.synapticGlow * 0.5);
+         lineWidth += f.synapticGlow * 1.0;
+      }
+      
+      // Failsafe NaN guard
+      const safeX = (val) => isNaN(val) ? cx : val;
+      const safeY = (val) => isNaN(val) ? cy : val;
+      
+      const sx = safeX(f.currStartX);
+      const sy = safeY(f.currStartY);
+      const cpx = safeX(f.currCpX);
+      const cpy = safeY(f.currCpY);
+      const ex = safeX(f.currEndX);
+      const ey = safeY(f.currEndY);
+
       if (this._evolutionLevel === 3) {
-         // Level 3 Apex Predator: Deep Crimson & Black
-         r = 200; g = 0; b = 30;
-         if (f.synapticGlow > 0.1) {
-            r = 255; g = 50; b = 50; // Hot red glow
-         }
-      } else if (this._evolutionLevel === 2) {
-         // Level 2: Gold/Orange
-         r = 255; g = 180; b = 50;
-         if (f.synapticGlow > 0.1) {
-            r = 255; g = 220; b = 100; // Hot gold glow
-         }
+         // ANAGLYPH 3D OFFSET RENDERING
+         // Render Red Channel (Right Shift)
+         ctx.globalCompositeOperation = 'screen';
+         ctx.globalAlpha = opacity * masterOpacity * 0.9;
+         ctx.lineWidth = lineWidth * 0.8;
+         ctx.strokeStyle = `rgba(255, 20, 40, ${opacity})`;
+         
+         const shiftX = (this._mouseX - cx) * 0.005 + 2; // Dynamic 3D offset
+         
+         ctx.beginPath();
+         ctx.moveTo(sx + shiftX, sy);
+         ctx.quadraticCurveTo(cpx + shiftX, cpy, ex + shiftX, ey);
+         ctx.stroke();
+         
+         // Render Cyan/Blue Channel (Left Shift)
+         ctx.strokeStyle = `rgba(20, 200, 255, ${opacity * 0.8})`;
+         ctx.beginPath();
+         ctx.moveTo(sx - shiftX, sy);
+         ctx.quadraticCurveTo(cpx - shiftX, cpy, ex - shiftX, ey);
+         ctx.stroke();
+         
+         ctx.globalCompositeOperation = 'source-over';
       } else {
-         // Level 1: Cyan
-         if (f.synapticGlow > 0.1) {
-            r = Math.floor(255 - (f.synapticGlow * 200));
-            g = 255;
-            b = 255;
-         }
+         // STANDARD RENDERING (Levels 1 & 2)
+         ctx.globalAlpha = opacity * masterOpacity;
+         ctx.lineWidth = lineWidth;
+         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+         
+         ctx.beginPath();
+         ctx.moveTo(sx, sy);
+         ctx.quadraticCurveTo(cpx, cpy, ex, ey);
+         ctx.stroke();
       }
+    }
+    
+    // Level 3: Central body mass (Anaglyph geometric core instead of soft orb)
+    if (this._evolutionLevel === 3) {
+      const bodyR = Math.min(this._coords.cssWidth, this._coords.cssHeight) * 0.04;
+      const shiftX = (this._mouseX - cx) * 0.005 + 3;
       
-      // Grappling overrides color to pure aggression
-      if (this._isGrappling) {
-         r = 255; g = 40; b = 0; // Aggressive Blood Orange / Red warning color
-         ctx.globalAlpha = Math.min(1.0, opacity * 1.5);
-      } else if (f.isDeepRed) {
-         r = 150; g = 10; b = 10; // Deep fleshy red for the background
-         ctx.globalAlpha = opacity * 0.7; // Push it further back
-      } else if (f.memoryTrace > 0.01 && this._evolutionLevel === 1) {
-         b = Math.floor(255 - (f.memoryTrace * 50)); // Gold for memory
-      }
+      ctx.globalCompositeOperation = 'screen';
       
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
-      
+      // Red Core
+      ctx.globalAlpha = masterOpacity * 0.8;
+      ctx.fillStyle = 'rgba(255, 0, 30, 0.7)';
       ctx.beginPath();
-      ctx.moveTo(f.currStartX, f.currStartY);
-      ctx.quadraticCurveTo(f.currCpX, f.currCpY, f.currEndX, f.currEndY);
-      ctx.stroke();
+      ctx.moveTo(cx + shiftX, cy - bodyR);
+      ctx.lineTo(cx + shiftX + bodyR, cy);
+      ctx.lineTo(cx + shiftX, cy + bodyR);
+      ctx.lineTo(cx + shiftX - bodyR, cy);
+      ctx.fill();
+      
+      // Cyan Core
+      ctx.fillStyle = 'rgba(0, 200, 255, 0.6)';
+      ctx.beginPath();
+      ctx.moveTo(cx - shiftX, cy - bodyR);
+      ctx.lineTo(cx - shiftX + bodyR, cy);
+      ctx.lineTo(cx - shiftX, cy + bodyR);
+      ctx.lineTo(cx - shiftX - bodyR, cy);
+      ctx.fill();
+      
+      ctx.globalCompositeOperation = 'source-over';
     }
     
     // Draw Nodes (Visual Hierarchy & Silhouette)
@@ -670,21 +771,43 @@ export class FiberSystem {
       const nx = f.currEndX;
       const ny = f.currEndY;
       
-      if (f.hierarchyLevel === 'primary') {
-        // Major structural node (Synapse)
-        ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-        // Memory trace permanently enlarges the synapse slightly
-        const memBoost = f.memoryTrace * 1.5;
-        ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 3.5) + memBoost, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Confident glowing halo around major nodes
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(0, 255, 255, ${0.15 + f.synapticGlow * 0.6 + f.memoryTrace * 0.1})`;
-        ctx.arc(nx, ny, 8 + (f.synapticGlow * 20) + (memBoost * 2), 0, Math.PI * 2);
-        ctx.fill();
-      } else if (f.hierarchyLevel === 'secondary') {
+        if (f.hierarchyLevel === 'primary') {
+          // Major structural node (Synapse)
+          ctx.beginPath();
+          if (this._evolutionLevel === 3) {
+             // Anaglyph geometric crosshatch for apex joints instead of orbs
+             const shiftX = (this._mouseX - cx) * 0.005 + 1.5;
+             ctx.globalCompositeOperation = 'screen';
+             
+             // Red joint
+             ctx.strokeStyle = 'rgba(255, 40, 60, 0.9)';
+             ctx.lineWidth = 1.0;
+             ctx.beginPath();
+             ctx.moveTo(nx + shiftX - 4, ny - 4); ctx.lineTo(nx + shiftX + 4, ny + 4);
+             ctx.moveTo(nx + shiftX + 4, ny - 4); ctx.lineTo(nx + shiftX - 4, ny + 4);
+             ctx.stroke();
+             
+             // Cyan joint
+             ctx.strokeStyle = 'rgba(0, 200, 255, 0.7)';
+             ctx.beginPath();
+             ctx.moveTo(nx - shiftX - 4, ny - 4); ctx.lineTo(nx - shiftX + 4, ny + 4);
+             ctx.moveTo(nx - shiftX + 4, ny - 4); ctx.lineTo(nx - shiftX - 4, ny + 4);
+             ctx.stroke();
+             
+             ctx.globalCompositeOperation = 'source-over';
+          } else {
+             ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+             const memBoost = f.memoryTrace * 1.5;
+             ctx.arc(nx, ny, 2.5 + (f.synapticGlow * 3.5) + memBoost, 0, Math.PI * 2);
+             ctx.fill();
+             
+             // Glowing halo
+             ctx.beginPath();
+             ctx.fillStyle = `rgba(0, 255, 255, ${0.15 + f.synapticGlow * 0.6 + f.memoryTrace * 0.1})`;
+             ctx.arc(nx, ny, 8 + (f.synapticGlow * 20) + (memBoost * 2), 0, Math.PI * 2);
+             ctx.fill();
+          }
+        } else if (f.hierarchyLevel === 'secondary') {
         // Medium node
         ctx.globalAlpha = contrastMasterOpacity * Math.min(1.0, 0.7 + f.synapticGlow + f.memoryTrace);
         ctx.beginPath();

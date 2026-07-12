@@ -207,6 +207,21 @@ export class Entity {
     // Cursor lean: in Curious state, entity drifts slightly toward cursor
     this._updateCursorLean(deltaSeconds);
     
+    // HMR / State Recovery Failsafe: Nuke all NaNs!
+    const sanitize = (val) => (val === undefined || isNaN(val) || !isFinite(val)) ? 0 : val;
+    this._state.pursuitX = sanitize(this._state.pursuitX);
+    this._state.pursuitY = sanitize(this._state.pursuitY);
+    this._state.driftX = sanitize(this._state.driftX);
+    this._state.driftY = sanitize(this._state.driftY);
+    this._cursorLean.wx = sanitize(this._cursorLean.wx);
+    this._cursorLean.wy = sanitize(this._cursorLean.wy);
+    this._cursorWorld.wx = sanitize(this._cursorWorld.wx);
+    this._cursorWorld.wy = sanitize(this._cursorWorld.wy);
+    this._cinematicOffsetX = sanitize(this._cinematicOffsetX);
+    this._cinematicOffsetY = sanitize(this._cinematicOffsetY);
+    
+    if (this._state.evolutionLevel === undefined) this._state.evolutionLevel = 1;
+    
     // THE APEX PREDATOR: Pursuit Logic
     // Organism actively hunts the cursor
     if (this._eatCooldown > 0) {
@@ -216,25 +231,41 @@ export class Entity {
        const pdy = this._cursorWorld.wy - this._state.pursuitY;
        const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
        
-       if (pDist > 0.05) {
-           // Speed increases with evolution level
-           const speed = this._state.evolutionLevel === 1 ? 0.3 : (this._state.evolutionLevel === 2 ? 0.6 : 1.2);
+       if (pDist > 0.01) {
+           // Speed increases with evolution level (World Units per second, not pixels!)
+           const speed = this._state.evolutionLevel === 1 ? 0.2 : (this._state.evolutionLevel === 2 ? 0.5 : 0.85);
            this._state.pursuitX += (pdx / pDist) * speed * deltaSeconds;
            this._state.pursuitY += (pdy / pDist) * speed * deltaSeconds;
        }
        
        // Collision Detection (EATEN)
-       // Core size scales with evolution level, so collision radius increases
-       const hitRadius = this._state.evolutionLevel === 1 ? 0.15 : (this._state.evolutionLevel === 2 ? 0.3 : 0.6);
-       if (pDist < hitRadius && this._state.masterOpacity > 0.8) {
+       // Core size scales with evolution level (World units radius)
+       const hitRadius = this._state.evolutionLevel === 1 ? 0.05 : (this._state.evolutionLevel === 2 ? 0.1 : 0.15);
+       // Only eat if the user is actively clicking (grappling) the cursor
+       if (pDist < hitRadius && this._state.masterOpacity > 0.8 && this._state.isGrappling) {
            this._eatCursor();
        }
     }
+    
+    // Force absolute visibility to bypass any intro animation bugs
+    this._state.masterOpacity = 1.0;
+    this._state.isUnraveled = true;
+    this._animator._introState = 'revealed';
+    this._animator._introRevealed = true;
+
+    if (this._state.masterOpacity <= 0) return;
 
     // Convert world position to screen, incorporating the cinematic reveal offset and pursuit offset
     const worldX = this._state.pursuitX + this._state.driftX + this._cursorLean.wx + this._cinematicOffsetX;
     const worldY = this._state.pursuitY + this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
-    const screen = this._coords.worldToScreen(worldX, worldY);
+    
+    // Use worldToScreen but clamp to keep organism visible on screen
+    const rawScreen = this._coords.worldToScreen(worldX, worldY);
+    const margin = 100;
+    const screen = {
+      x: Math.max(margin, Math.min(this._coords.cssWidth - margin, rawScreen.x)),
+      y: Math.max(margin, Math.min(this._coords.cssHeight - margin, rawScreen.y))
+    };
 
     // Also get the target control point for fibers in screen space
     const targetWorldCpX = this._cursorWorld.wx + this._state.driftX; // fibers reach slightly past the body drift
@@ -264,9 +295,26 @@ export class Entity {
       ctx.translate(offsetX, offsetY);
     }
 
+    // DRAW THE ORGANISM (Sentient Fibers)
+    this._fiberSystem.render(
+      ctx,
+      this._state.masterOpacity,
+      baseCx,
+      baseCy,
+      this._animator._introState,
+      this._animator._temperament,
+      this._state.standoffIntensity,
+      this._state.standoffContext
+    );
+
+    // RESTORE CONTEXT
+    if (offsetX !== 0 || offsetY !== 0) {
+      ctx.restore();
+    }
+
     const timeSinceBirth = this._birthTime ? (performance.now() - this._birthTime) / 1000 : 0;
 
-    // Draw geometry
+    // Draw rigid geometry (Disabled by default in constants)
     if (REALITY_LAWS.IS_ORGANISM_VISIBLE) {
       this._geometry.render(
         ctx,
