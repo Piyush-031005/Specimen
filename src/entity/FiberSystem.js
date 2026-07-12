@@ -980,25 +980,62 @@ export class FiberSystem {
     const px = bDist > 0 ? (bdx / bDist) * maxEmbryoShift : 0;
     const py = bDist > 0 ? (bdy / bDist) * maxEmbryoShift : 0;
     
-    ctx.beginPath();
     // Shift embryo color based on evolution & grapple
-    if (this._isGrappling) {
-       ctx.fillStyle = `rgba(255, 150, 0, ${0.9 + arrivalBright})`;
-       ctx.shadowColor = `rgba(255, 100, 0, 1.0)`;
-    } else if (this._evolutionLevel === 3) {
-       ctx.fillStyle = `rgba(255, 50, 50, ${0.9 + arrivalBright})`;
+    if (this._evolutionLevel === 3) {
+       // Draw Apex Animal Core (Mandibles + 8 Eyes)
+       const eyecx = this._brainX + px;
+       const eyecy = this._brainY + py;
+       
+       // Draw 2 massive jagged mandibles
+       ctx.strokeStyle = `rgba(255, 30, 30, ${0.9 + arrivalBright})`;
+       ctx.lineWidth = 2.0 + this._brainArrivalPulse * 3;
+       
+       ctx.beginPath();
+       ctx.moveTo(eyecx - 5, eyecy - 15);
+       ctx.lineTo(eyecx - 20, eyecy + 5);
+       ctx.lineTo(eyecx - 8, eyecy + 25);
+       ctx.stroke();
+
+       ctx.beginPath();
+       ctx.moveTo(eyecx + 5, eyecy - 15);
+       ctx.lineTo(eyecx + 20, eyecy + 5);
+       ctx.lineTo(eyecx + 8, eyecy + 25);
+       ctx.stroke();
+
+       // Draw 8 Eyes
+       ctx.fillStyle = `rgba(255, 20, 20, ${1.0 + arrivalBright})`;
        ctx.shadowColor = `rgba(255, 0, 0, 1.0)`;
-    } else if (this._evolutionLevel === 2) {
-       ctx.fillStyle = `rgba(255, 200, 100, ${0.9 + arrivalBright})`;
-       ctx.shadowColor = `rgba(255, 180, 0, 1.0)`;
+       ctx.shadowBlur = 15;
+       
+       const eyeAngles = [-0.6, -0.2, 0.2, 0.6, -0.8, -0.4, 0.4, 0.8];
+       const eyeDistances = [12, 10, 10, 12, 18, 16, 16, 18];
+       
+       eyeAngles.forEach((angle, idx) => {
+           const dist = eyeDistances[idx];
+           const ex = eyecx + Math.sin(angle) * dist;
+           const ey = eyecy - Math.cos(angle) * dist;
+           
+           ctx.beginPath();
+           ctx.arc(ex, ey, 2.5 + (this._brainArrivalPulse * 2.0), 0, Math.PI * 2);
+           ctx.fill();
+       });
     } else {
-       ctx.fillStyle = `rgba(0, 255, 255, ${0.9 + arrivalBright})`;
-       ctx.shadowColor = 'rgba(0, 200, 255, 1.0)';
+       // Normal Embryo for Level 1 and 2
+       ctx.beginPath();
+       if (this._isGrappling) {
+          ctx.fillStyle = `rgba(255, 150, 0, ${0.9 + arrivalBright})`;
+          ctx.shadowColor = `rgba(255, 100, 0, 1.0)`;
+       } else if (this._evolutionLevel === 2) {
+          ctx.fillStyle = `rgba(255, 200, 100, ${0.9 + arrivalBright})`;
+          ctx.shadowColor = `rgba(255, 180, 0, 1.0)`;
+       } else {
+          ctx.fillStyle = `rgba(0, 255, 255, ${0.9 + arrivalBright})`;
+          ctx.shadowColor = 'rgba(0, 200, 255, 1.0)';
+       }
+       ctx.shadowBlur = 20;
+       ctx.arc(this._brainX + px, this._brainY + py, 10 + (this._brainArrivalPulse * 5.0) + (this._evolutionLevel * 2), 0, Math.PI * 2);
+       ctx.fill();
     }
-    
-    ctx.shadowBlur = 20;
-    ctx.arc(this._brainX + px, this._brainY + py, 10 + (this._brainArrivalPulse * 5.0) + (this._evolutionLevel * 2), 0, Math.PI * 2);
-    ctx.fill();
     
     // 3. Dense Inner Capillary Network (Veins connecting embryo to sac walls)
     ctx.beginPath();
