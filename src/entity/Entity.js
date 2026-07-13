@@ -252,12 +252,6 @@ export class Entity {
        }
     }
     
-    // Force absolute visibility to bypass any intro animation bugs
-    this._state.masterOpacity = 1.0;
-    this._state.isUnraveled = true;
-    this._animator._introState = 'revealed';
-    this._animator._introRevealed = true;
-
     if (this._state.masterOpacity <= 0) return;
 
     // Convert world position to screen, incorporating the cinematic reveal offset and pursuit offset
