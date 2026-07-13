@@ -152,10 +152,61 @@ EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
     // Color Timeline Shifts
     if (level === 2) {
         body.style.backgroundColor = '#001a24'; // Cyan tint
-        if (hud) hud.style.color = 'rgba(0, 255, 255, 0.08)';
+        if (hud) {
+            hud.style.color = 'rgba(0, 255, 255, 0.08)';
+            hud.style.filter = 'blur(1px)';
+            hud.style.transform = 'scale(1.02)';
+        }
     } else if (level === 3) {
-        body.style.backgroundColor = '#1a0500'; // Deep Orange tint
-        if (hud) hud.style.color = 'rgba(255, 60, 0, 0.08)';
+        // NEGATIVE SPACE INVERSION (Color Contrast Shock)
+        body.style.backgroundColor = '#ffffff'; // Blinding White
+        if (hud) {
+            hud.style.color = 'rgba(0, 0, 0, 0.8)'; // Ink Black text
+            hud.style.textShadow = 'none';
+            hud.style.filter = 'blur(3px) contrast(200%)';
+            hud.style.transform = 'scale(1.05)';
+        }
+        const canvas = document.getElementById('canvas');
+        if (canvas) {
+            canvas.style.transition = 'filter 0.5s ease';
+            canvas.style.filter = 'brightness(0)'; // Organism becomes pure ink black
+        }
+        
+        // CURSOR HIJACK
+        // Render a fake black cursor and pull it to center
+        let fakeCursor = document.getElementById('fake-hijacked-cursor');
+        if (!fakeCursor) {
+            fakeCursor = document.createElement('div');
+            fakeCursor.id = 'fake-hijacked-cursor';
+            fakeCursor.style.position = 'fixed';
+            fakeCursor.style.width = '12px';
+            fakeCursor.style.height = '12px';
+            fakeCursor.style.borderRadius = '50%';
+            fakeCursor.style.backgroundColor = '#000000';
+            fakeCursor.style.pointerEvents = 'none';
+            fakeCursor.style.zIndex = '999999';
+            fakeCursor.style.transition = 'left 0.1s ease, top 0.1s ease';
+            document.body.appendChild(fakeCursor);
+        }
+        
+        // Force the stored cursor coords to snap to center
+        const hijackLoop = () => {
+            if (climaxTriggered) return; // Stop if climax is happening
+            
+            // Gradually pull cursor to center
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+            window.lastCursorX += (cx - window.lastCursorX) * 0.1;
+            window.lastCursorY += (cy - window.lastCursorY) * 0.1;
+            
+            if (fakeCursor) {
+                fakeCursor.style.left = (window.lastCursorX - 6) + 'px';
+                fakeCursor.style.top = (window.lastCursorY - 6) + 'px';
+            }
+            
+            requestAnimationFrame(hijackLoop);
+        };
+        hijackLoop();
     }
     
     if (level === 3 && !climaxTriggered) {
@@ -171,6 +222,9 @@ EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
             
             setTimeout(() => {
                 body.style.backgroundColor = '#000000'; // Blackout
+                const fakeCursor = document.getElementById('fake-hijacked-cursor');
+                if (fakeCursor) fakeCursor.style.opacity = '0';
+                
                 const report = document.getElementById('containment-report');
                 report.classList.add('visible');
                 
