@@ -151,7 +151,7 @@ export class CinematicIntro {
       opacity: '0',
       transition: 'opacity 1.5s ease-in-out',
       textTransform: 'uppercase',
-      textShadow: '0 0 15px rgba(255,255,255,0.2)' // Subtle, elegant glow
+      textShadow: '0 0 30px #000, 0 0 15px #000, 0 5px 5px rgba(0,0,0,0.8)' // Strong black glow to cut through bright background
     });
 
     this._overlay.appendChild(this._textContainer);
