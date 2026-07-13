@@ -142,9 +142,119 @@
         transition: opacity 3s ease 1s;
       }
       .report-climax.visible { opacity: 1; }
+      
+      /* Containment Glass Noise */
+      #containment-noise {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        z-index: 9998;
+        opacity: 0.15;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      }
+
+      /* Clinical Containment Frame */
+      .containment-frame {
+        position: fixed;
+        pointer-events: none;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 2px;
+        color: rgba(255, 255, 255, 0.4);
+        z-index: 9990;
+        text-transform: uppercase;
+      }
+      .frame-top-left { top: 30px; left: 40px; }
+      .frame-top-right { top: 30px; right: 40px; text-align: right; }
+      .frame-bottom-left { bottom: 30px; left: 40px; }
+      .frame-bottom-right { bottom: 30px; right: 40px; text-align: right; }
+
+      .rec-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background-color: #ff3333;
+        border-radius: 50%;
+        margin-right: 8px;
+        animation: pulse-rec 2s infinite;
+      }
+      @keyframes pulse-rec {
+        0% { opacity: 1; }
+        50% { opacity: 0.2; }
+        100% { opacity: 1; }
+      }
+
+      /* Biometric Reticle */
+      #biometric-reticle {
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        transform: translate(-50%, -50%);
+        transition: transform 0.1s ease-out;
+      }
+      .reticle-svg {
+        width: 100%;
+        height: 100%;
+        stroke: rgba(255, 255, 255, 0.6);
+        stroke-width: 1;
+        fill: none;
+        transition: transform 0.2s ease, stroke 0.2s ease;
+      }
+      .reticle-data {
+        position: absolute;
+        left: 30px;
+        top: 20px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        color: rgba(255, 255, 255, 0.5);
+        white-space: nowrap;
+        line-height: 1.4;
+      }
     </style>
   </head>
   <body>
+    <!-- Film Grain Overlay -->
+    <div id="containment-noise"></div>
+
+    <!-- Clinical Containment Frame -->
+    <div class="containment-frame frame-top-left">
+      <div id="sys-time">SYS.TIME --:--:--:---</div>
+      <div>OBSERVATION MODE: ACTIVE</div>
+    </div>
+    <div class="containment-frame frame-top-right">
+      <div><span class="rec-indicator"></span>REC</div>
+      <div>SYNC RATE: <span id="sync-rate">98.4%</span></div>
+    </div>
+    <div class="containment-frame frame-bottom-left">
+      <div>SESSION ID: <span id="session-id"></span></div>
+      <div>// ENCRYPTED CONNECTION</div>
+    </div>
+    <div class="containment-frame frame-bottom-right">
+      <div>DIST: <span id="entity-dist">0.00</span> AU</div>
+      <div>STATE: <span id="entity-state">CALM</span></div>
+    </div>
+
+    <!-- Biometric Reticle -->
+    <div id="biometric-reticle">
+      <svg class="reticle-svg" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="40" stroke-dasharray="4 8" />
+        <line x1="50" y1="0" x2="50" y2="20" />
+        <line x1="50" y1="80" x2="50" y2="100" />
+        <line x1="0" y1="50" x2="20" y2="50" />
+        <line x1="80" y1="50" x2="100" y2="50" />
+        <circle cx="50" cy="50" r="2" fill="rgba(255,255,255,0.6)" />
+      </svg>
+      <div class="reticle-data">
+        X: <span id="ret-x">000</span><br>
+        Y: <span id="ret-y">000</span>
+      </div>
+    </div>
 
     <canvas id="canvas" aria-label="An interactive digital organism" role="img"></canvas>
     
@@ -154,8 +264,8 @@
       <div class="editorial-subtitle">COGNITIVE INTERFACE</div>
       
       <div class="editorial-stats">
-        <div id="hud-level">SHARED UNDERSTANDING: LOW</div>
-        <div id="hud-temperament">TRUST: LOW</div>
+        <div id="hud-level">SHARED UNDERSTANDING: I</div>
+        <div id="hud-temperament">NEURAL STATE: CALM</div>
       </div>
     </div>
 

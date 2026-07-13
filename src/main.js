@@ -444,3 +444,62 @@ if (memory.isReturnVisitor && sessionData.trust > 0) {
     });
   }
 }
+
+// ─── Containment HUD Logic ────────────────────────────────────────────────────
+
+const sysTimeEl = document.getElementById('sys-time');
+if (sysTimeEl) {
+    setInterval(() => {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        const ms = String(now.getMilliseconds()).padStart(3, '0');
+        sysTimeEl.innerText = `SYS.TIME ${h}:${m}:${s}:${ms}`;
+    }, 33);
+}
+
+const sessionIdEl = document.getElementById('session-id');
+if (sessionIdEl) {
+    sessionIdEl.innerText = `0x${Math.random().toString(16).substr(2, 8).toUpperCase()}`;
+}
+
+const reticle = document.getElementById('biometric-reticle');
+const retXEl = document.getElementById('ret-x');
+const retYEl = document.getElementById('ret-y');
+const retSvg = document.querySelector('.reticle-svg');
+const entityDistEl = document.getElementById('entity-dist');
+
+// Hide default cursor
+document.body.style.cursor = 'none';
+
+document.addEventListener('mousemove', (e) => {
+    if (reticle) {
+        reticle.style.left = e.clientX + 'px';
+        reticle.style.top = e.clientY + 'px';
+    }
+    if (retXEl) retXEl.innerText = String(e.clientX).padStart(4, '0');
+    if (retYEl) retYEl.innerText = String(e.clientY).padStart(4, '0');
+    
+    // Quick estimation of entity distance from center
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const dist = Math.sqrt(Math.pow(e.clientX - cx, 2) + Math.pow(e.clientY - cy, 2));
+    if (entityDistEl) {
+        entityDistEl.innerText = (dist / 1000).toFixed(2);
+    }
+});
+
+document.addEventListener('mousedown', () => {
+    if (retSvg) {
+        retSvg.style.transform = 'scale(0.8) rotate(45deg)';
+        retSvg.style.stroke = '#ff3333';
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (retSvg) {
+        retSvg.style.transform = 'scale(1) rotate(0deg)';
+        retSvg.style.stroke = 'rgba(255, 255, 255, 0.6)';
+    }
+});
