@@ -57,7 +57,11 @@ export class Entity {
       isUnraveled:    false,
       pluckPhase:     'idle', // idle -> tension -> freeze -> exploded
       standoffIntensity: 0,
-      standoffContext: null
+      standoffContext: null,
+      isGrappling:    false,
+      pursuitX:       0,
+      pursuitY:       0,
+      evolutionLevel: 1
     };
 
     /** @type {number} Current world stage (0-5) */
@@ -85,10 +89,10 @@ export class Entity {
     /** @type {{ wx: number, wy: number }} Smoothed cursor lean */
     this._cursorLean  = { wx: 0, wy: 0 };
     
-    /** @type {{ wx: number, wy: number }} Intent focus (very slow) */
     this._intentFocus = { wx: 0, wy: 0 };
 
     this._lastInputTime = null;
+    this._eatCooldown = 0;
 
     // ─── Subscriptions ────────────────────────────────────────────────────
     EventBus.on(EVENTS.BEHAVIOR_STATE_CHANGED, ({ state }) => {
@@ -110,14 +114,21 @@ export class Entity {
       this._geometry.rebuildCache();
     });
 
-    EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+    EventBus.on(EVENTS.USER_INPUT, ({ x, y, type }) => {
       const { wx, wy } = coords.screenToWorld(x, y);
       this._cursorWorld.wx = wx;
       this._cursorWorld.wy = wy;
       this._lastInputTime = performance.now();
+      
+      if (type === 'pointerdown' || type === 'keydown') {
+        this._state.isGrappling = true;
+      } else if (type === 'pointerup' || type === 'keyup') {
+        this._state.isGrappling = false;
+      }
     });
 
     EventBus.on(EVENTS.FIBER_PLUCK, ({ velocityX, yPos }) => {
+      if (!REALITY_LAWS.ENABLE_FIBER_PLUCK) return;
       // Only trigger if we are idle
       if (this._state.pluckPhase === 'idle') {
         this._state.pluckPhase = 'tension';
@@ -144,6 +155,9 @@ export class Entity {
       this._state.pluckPhase = 'idle';
       this._fiberSystem.resetUnravel();
     });
+    
+    // Add eat delay to prevent multiple triggers in one frame
+    this._eatCooldown = 0;
 
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
       this._onTick(tickData);
@@ -157,11 +171,19 @@ export class Entity {
   init() {
     this._birthTime = performance.now();
     
-    // 0.2s: Instantly appear (masterOpacity = 1)
+    // 0.0s -> Darkness (opacity 0)
+    this._state.masterOpacity = 0;
+
+    // 0.8s -> Tiny neural pulse
+    setTimeout(() => {
+      EventBus.emit(EVENTS.ENTITY_PULSE_EMITTED, { timestamp: performance.now(), type: 'auto' });
+    }, 800);
+
+    // 1.5s -> Living structure slowly appears over 2.5 seconds
     this._scheduler.schedule({
       name:     'entity-birth',
-      duration: 100,
-      delay:    200,
+      duration: 2500,
+      delay:    1500,
       easing:   smootherstep,
       onUpdate: (t) => {
         this._state.masterOpacity = t;
@@ -184,38 +206,114 @@ export class Entity {
 
     // Cursor lean: in Curious state, entity drifts slightly toward cursor
     this._updateCursorLean(deltaSeconds);
+    
+    // HMR / State Recovery Failsafe: Nuke all NaNs!
+    const sanitize = (val) => (val === undefined || isNaN(val) || !isFinite(val)) ? 0 : val;
+    this._state.pursuitX = sanitize(this._state.pursuitX);
+    this._state.pursuitY = sanitize(this._state.pursuitY);
+    this._state.driftX = sanitize(this._state.driftX);
+    this._state.driftY = sanitize(this._state.driftY);
+    this._cursorLean.wx = sanitize(this._cursorLean.wx);
+    this._cursorLean.wy = sanitize(this._cursorLean.wy);
+    this._cursorWorld.wx = sanitize(this._cursorWorld.wx);
+    this._cursorWorld.wy = sanitize(this._cursorWorld.wy);
+    this._cinematicOffsetX = sanitize(this._cinematicOffsetX);
+    this._cinematicOffsetY = sanitize(this._cinematicOffsetY);
+    
+    if (this._state.evolutionLevel === undefined) this._state.evolutionLevel = 1;
+    
+    // THE APEX PREDATOR: Pursuit Logic
+    // Organism actively hunts the cursor
+    if (this._eatCooldown > 0) {
+       this._eatCooldown -= deltaSeconds;
+    } else {
+       const pdx = this._cursorWorld.wx - this._state.pursuitX;
+       const pdy = this._cursorWorld.wy - this._state.pursuitY;
+       const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
+       
+       if (pDist > 0.01) {
+           // Speed increases with evolution level (World Units per second, not pixels!)
+           const speed = this._state.evolutionLevel === 1 ? 0.2 : (this._state.evolutionLevel === 2 ? 0.5 : 0.85);
+           this._state.pursuitX += (pdx / pDist) * speed * deltaSeconds;
+           this._state.pursuitY += (pdy / pDist) * speed * deltaSeconds;
+       }
+       
+       // Decrement cooldown
+       if (this._eatCooldown > 0) {
+           this._eatCooldown -= deltaSeconds;
+       }
+       
+       // Collision Detection (EATEN)
+       // Core size scales with evolution level (World units radius)
+       const hitRadius = this._state.evolutionLevel === 1 ? 0.05 : (this._state.evolutionLevel === 2 ? 0.1 : 0.15);
+       // Only eat if the user is actively clicking (grappling) the cursor and cooldown is 0
+       if (pDist < hitRadius && this._state.masterOpacity > 0.8 && this._state.isGrappling && this._eatCooldown <= 0) {
+           this._eatCursor();
+       }
+    }
+    
+    if (this._state.masterOpacity <= 0) return;
 
-    // Convert world position to screen, incorporating the cinematic reveal offset
-    const worldX = this._state.driftX + this._cursorLean.wx + this._cinematicOffsetX;
-    const worldY = this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
-    const screen = this._coords.worldToScreen(worldX, worldY);
+    // Convert world position to screen, incorporating the cinematic reveal offset and pursuit offset
+    const worldX = this._state.pursuitX + this._state.driftX + this._cursorLean.wx + this._cinematicOffsetX;
+    const worldY = this._state.pursuitY + this._state.driftY + this._cursorLean.wy + this._cinematicOffsetY;
+    
+    // Use worldToScreen but clamp to keep organism visible on screen
+    const rawScreen = this._coords.worldToScreen(worldX, worldY);
+    const margin = 100;
+    const screen = {
+      x: Math.max(margin, Math.min(this._coords.cssWidth - margin, rawScreen.x)),
+      y: Math.max(margin, Math.min(this._coords.cssHeight - margin, rawScreen.y))
+    };
+
+    const baseCx = this._coords.center.x;
+    const baseCy = this._coords.center.y;
+    const offsetX = screen.x - baseCx;
+    const offsetY = screen.y - baseCy;
 
     // Also get the target control point for fibers in screen space
-    const targetWorldCpX = this._cursorWorld.wx + this._state.driftX;
+    const targetWorldCpX = this._cursorWorld.wx + this._state.driftX; // fibers reach slightly past the body drift
     const targetWorldCpY = this._cursorWorld.wy + this._state.driftY;
     const targetScreenCp = this._coords.worldToScreen(targetWorldCpX, targetWorldCpY);
 
     const idleMs = this._lastInputTime ? (performance.now() - this._lastInputTime) : 0;
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
-    // Update fiber physics
-    this._fiberSystem.update(deltaSeconds, this._state.isUnraveled, targetScreenCp.x, targetScreenCp.y, this._state.behaviorState, isCursorStill, this._isReturningVisitor, this._state.pluckPhase, this._animator._introState, this._animator._temperament);
+    // Update fiber physics - subtract offsetX so the translated canvas doesn't double the distance to the mouse
+    this._fiberSystem.update(
+      deltaSeconds, this._state.isUnraveled, targetScreenCp.x - offsetX, targetScreenCp.y - offsetY, 
+      this._state.behaviorState, isCursorStill, this._isReturningVisitor, 
+      this._state.pluckPhase, this._animator._introState, this._animator._temperament,
+      this._state.isGrappling
+    );
 
     // Temporarily translate context to entity's current screen position.
-    // Geometry renders relative to the center it was given, so we offset it.
-    const baseCx = this._coords.center.x;
-    const baseCy = this._coords.center.y;
-    const offsetX = screen.x - baseCx;
-    const offsetY = screen.y - baseCy;
 
     if (offsetX !== 0 || offsetY !== 0) {
       ctx.save();
       ctx.translate(offsetX, offsetY);
     }
 
+    // DRAW THE ORGANISM (Sentient Fibers)
+    this._fiberSystem.render(
+      ctx,
+      this._state.masterOpacity,
+      baseCx,
+      baseCy,
+      this._animator._introState,
+      this._animator._temperament,
+      this._state.standoffIntensity,
+      this._state.standoffContext
+    );
+
+    // RESTORE CONTEXT
+    if (offsetX !== 0 || offsetY !== 0) {
+      ctx.restore();
+    }
+
     const timeSinceBirth = this._birthTime ? (performance.now() - this._birthTime) / 1000 : 0;
 
-    // Draw geometry
+    // Draw rigid geometry (Disabled by default in constants)
     if (REALITY_LAWS.IS_ORGANISM_VISIBLE) {
       this._geometry.render(
         ctx,
@@ -238,12 +336,36 @@ export class Entity {
       ctx.restore();
     }
   }
+  
+  /**
+   * The organism catches the cursor.
+   * Triggers evolution, massive glitch effects, and UI alerts.
+   */
+  _eatCursor() {
+      this._eatCooldown = 2.0; // Wait 2 seconds before it can eat again
+      
+      if (this._state.evolutionLevel < 3) {
+          this._state.evolutionLevel++;
+          EventBus.emit('ORGANISM_EVOLVED', { level: this._state.evolutionLevel });
+      } else {
+          EventBus.emit('ORGANISM_APEX_FEEDING', {}); // Just feed and shake screen if maxed out
+      }
+      
+      // Tell FiberSystem to mutate and grow
+      this._fiberSystem.triggerMutation(this._state.evolutionLevel);
+  }
 
   /**
    * Lean toward cursor and react subtly to proximity.
    * @private
    */
   _updateCursorLean(deltaSeconds) {
+    if (!REALITY_LAWS.ENABLE_CURIOUS_LEAN) {
+      this._cursorLean.wx = 0;
+      this._cursorLean.wy = 0;
+      return;
+    }
+
     const isCurious = this._state.behaviorState === BEHAVIOR_STATES.CURIOUS;
     
     // Calculate cursor speed/volatility

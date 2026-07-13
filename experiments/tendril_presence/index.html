@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Presence Encounter Prototype</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #020202; /* Absolute darkness floor */
+      overflow: hidden;
+      cursor: crosshair;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #debug {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 11px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="debug">Awaiting encounter...</div>
+
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const debug = document.getElementById('debug');
+    
+    let width, height, cx, cy;
+    
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * window.devicePixelRatio;
+      canvas.height = height * window.devicePixelRatio;
+      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+      cx = width / 2;
+      cy = height / 2;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const getRootX = () => cx;
+    const getRootY = () => cy + 150;
+
+    let mouseX = cx;
+    let mouseY = cy;
+    let lastMouseX = cx;
+    let lastMouseY = cy;
+    let mouseStillTime = 0;
+    
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      mouseStillTime = 0; 
+    });
+
+    const startTime = performance.now();
+    let lastTime = startTime;
+
+    // Physics state
+    let tipX = getRootX();
+    let tipY = getRootY() + 50; 
+    let tipVx = 0;
+    let tipVy = 0;
+    
+    // Intent/Decision state
+    let intentTargetX = tipX;
+    let intentTargetY = tipY;
+    let decisionTimer = 0;
+    let isMoving = false;
+    let currentPhase = "HIDDEN";
+    let tapFreezeTimer = 0;
+    let maxTapFreeze = 1;
+    let emergeProgress = 0;
+    let recoilType = 0;
+
+    function updateDebug(elapsed) {
+      debug.innerText = `Time: ${elapsed.toFixed(1)}s | Phase: ${currentPhase} | Stillness: ${mouseStillTime.toFixed(1)}s`;
+    }
+
+    // Cubic bezier interpolation
+    function getBezierPoint(t, p0, p1, p2, p3) {
+      const u = 1 - t;
+      const tt = t * t;
+      const uu = u * u;
+      const uuu = uu * u;
+      const ttt = tt * t;
+      return {
+        x: uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x,
+        y: uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+      };
+    }
+
+    function loop(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+      const elapsed = (now - startTime) / 1000;
+
+      const distMoved = Math.hypot(mouseX - lastMouseX, mouseY - lastMouseY);
+      if (distMoved < 2) {
+        mouseStillTime += dt;
+      }
+      lastMouseX = mouseX;
+      lastMouseY = mouseY;
+
+      // Render base darkness
+      ctx.fillStyle = '#020202';
+      ctx.fillRect(0, 0, width, height);
+
+      const dx = mouseX - getRootX();
+      const dy = mouseY - getRootY();
+      const distToMouse = Math.hypot(mouseX - tipX, mouseY - tipY);
+      
+      // Narrative Phases
+      if (elapsed > 2) {
+        if (currentPhase === "HIDDEN") {
+          currentPhase = "SEARCHING";
+          tipX = getRootX();
+          tipY = getRootY() + 50;
+          intentTargetX = tipX;
+          intentTargetY = tipY;
+        }
+        
+        // Emerge over 8 seconds. 
+        // 0-0.4: Shadow only. 
+        // 0.4-1.0: Line fades in.
+        if (emergeProgress < 1) {
+          emergeProgress += dt * 0.15; 
+          if (emergeProgress > 1) emergeProgress = 1;
+        }
+
+        if (currentPhase === "SEARCHING" || currentPhase === "OBSERVING") {
+          if (distToMouse < 120) {
+            currentPhase = "OBSERVING";
+          } else if (distToMouse > 180) {
+            currentPhase = "SEARCHING";
+          }
+
+          decisionTimer -= dt;
+          if (decisionTimer <= 0) {
+            if (isMoving) {
+              isMoving = false;
+              decisionTimer = currentPhase === "OBSERVING" 
+                  ? 0.5 + Math.random() * 1.5 
+                  : 0.2 + Math.random() * 0.6;
+            } else {
+              isMoving = true;
+              decisionTimer = 0.15 + Math.random() * 0.4;
+              
+              const stepSize = currentPhase === "SEARCHING" 
+                  ? 30 + Math.random() * 50 
+                  : 10 + Math.random() * 15;
+              
+              const tDx = mouseX - tipX;
+              const tDy = mouseY - tipY;
+              const tDist = Math.hypot(tDx, tDy);
+              const tNx = tDist > 0 ? tDx / tDist : 0;
+              const tNy = tDist > 0 ? tDy / tDist : 0;
+              
+              const perpX = -tNy;
+              const perpY = tNx;
+              
+              const sidewaysNoise = currentPhase === "SEARCHING" ? 1.5 : 0.8;
+              const sideways = (Math.random() - 0.5) * sidewaysNoise * 2.0;
+              const forward = Math.random() * 0.7 + 0.3; 
+              
+              const moveNx = tNx * forward + perpX * sideways;
+              const moveNy = tNy * forward + perpY * sideways;
+              const moveMag = Math.hypot(moveNx, moveNy);
+              
+              intentTargetX = tipX + (moveNx / moveMag) * stepSize;
+              intentTargetY = tipY + (moveNy / moveMag) * stepSize;
+            }
+          }
+
+          // Trigger Tap
+          const requiredStillness = 0.5 + Math.random() * 2.0;
+          if (currentPhase === "OBSERVING" && mouseStillTime > requiredStillness) {
+            currentPhase = "TAPPING";
+            intentTargetX = mouseX;
+            intentTargetY = mouseY;
+            isMoving = true;
+          }
+        } else if (currentPhase === "TAPPING") {
+          intentTargetX = mouseX;
+          intentTargetY = mouseY;
+          
+          if (distToMouse < 6) {
+            currentPhase = "RECOILING";
+            maxTapFreeze = 0.4 + Math.random() * 0.4;
+            tapFreezeTimer = maxTapFreeze; 
+            recoilType = Math.floor(Math.random() * 3);
+          }
+        } else if (currentPhase === "RECOILING") {
+          tapFreezeTimer -= dt;
+          if (tapFreezeTimer <= 0) {
+            if (recoilType === 0) {
+              intentTargetX = getRootX() + (mouseX - getRootX()) * 0.2;
+              intentTargetY = getRootY();
+            } else if (recoilType === 1) {
+              intentTargetX = getRootX() + (mouseX - getRootX()) * 0.6;
+              intentTargetY = getRootY() + (mouseY - getRootY()) * 0.6;
+            } else {
+              intentTargetX = mouseX + (Math.random() - 0.5) * 40;
+              intentTargetY = mouseY + (Math.random() - 0.5) * 40;
+            }
+          }
+        }
+
+        // Physics
+        let stiffness = 30;
+        let damping = 6;
+
+        if (currentPhase === "TAPPING") {
+          stiffness = 120; 
+          damping = 8;
+        } else if (currentPhase === "RECOILING") {
+          if (tapFreezeTimer > 0) {
+            stiffness = 500; 
+            damping = 30;
+          } else {
+            if (recoilType === 0) {
+              stiffness = 8; 
+              damping = 10;
+            } else if (recoilType === 1) {
+              stiffness = 20; 
+              damping = 8;
+            } else {
+              stiffness = 40; 
+              damping = 6;
+            }
+          }
+        } else {
+          stiffness = 40;
+          damping = isMoving ? 5.5 : 8.0; 
+        }
+        
+        const ax = (intentTargetX - tipX) * stiffness - tipVx * damping;
+        const ay = (intentTargetY - tipY) * stiffness - tipVy * damping;
+        
+        tipVx += ax * dt;
+        tipVy += ay * dt;
+        tipX += tipVx * dt;
+        tipY += tipVy * dt;
+
+        // Tremors
+        let tremorX = 0;
+        let tremorY = 0;
+        if (currentPhase === "RECOILING" && tapFreezeTimer > 0) {
+          tremorX = Math.sin(now * 0.05) * 0.6;
+          tremorY = Math.cos(now * 0.06) * 0.6;
+        } else if (currentPhase !== "HIDDEN") {
+          tremorX = Math.sin(now * 0.003) * 1.5;
+          tremorY = Math.cos(now * 0.004) * 1.5;
+        }
+
+        const finalTipX = tipX + tremorX;
+        const finalTipY = tipY + tremorY;
+
+        const rootX = getRootX();
+        const rootY = getRootY();
+
+        const p0 = { x: rootX, y: rootY };
+        const p1 = { 
+          x: rootX + (finalTipX - rootX) * 0.3 + Math.sin(now * 0.001) * 40, 
+          y: rootY + (finalTipY - rootY) * 0.3 + Math.cos(now * 0.0013) * 40 
+        };
+        const p2 = { 
+          x: rootX + (finalTipX - rootX) * 0.7 + Math.cos(now * 0.0017) * -30, 
+          y: rootY + (finalTipY - rootY) * 0.7 + Math.sin(now * 0.002) * -30 
+        };
+        const p3 = { x: finalTipX, y: finalTipY };
+
+        // 1. Render the Disturbance (The Shadow mass pressing against the darkness)
+        // It precedes the tendril opacity. 
+        const shadowAlpha = Math.min(1.0, emergeProgress * 2.5); // Reaches full opacity early
+        if (shadowAlpha > 0.01) {
+          // The mass sits slightly behind the tip
+          const massX = rootX + (finalTipX - rootX) * 0.8;
+          const massY = rootY + (finalTipY - rootY) * 0.8;
+          const massRadius = 120 + Math.sin(now * 0.002) * 20;
+          
+          const shadowGrad = ctx.createRadialGradient(massX, massY, 0, massX, massY, massRadius);
+          // A deep, bruised indigo/black hole color that disturbs the pure black
+          shadowGrad.addColorStop(0, `rgba(15, 20, 30, ${shadowAlpha * 0.4})`); 
+          shadowGrad.addColorStop(0.5, `rgba(8, 12, 18, ${shadowAlpha * 0.2})`);
+          shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.fillStyle = shadowGrad;
+          ctx.beginPath();
+          ctx.arc(massX, massY, massRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // 2. Render the Tendril (Muscle Tension)
+        // It only starts fading in after the shadow is established (emergeProgress > 0.4)
+        let lineAlpha = Math.max(0, (emergeProgress - 0.4) / 0.6);
+        if (currentPhase === "RECOILING" && tapFreezeTimer <= 0) {
+           lineAlpha *= 0.5; 
+        }
+
+        if (lineAlpha > 0.01) {
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          
+          const segments = 25;
+          for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const pt = getBezierPoint(t, p0, p1, p2, p3);
+            
+            // Muscle tension: tiny unpredictable kinks perpendicular-ish to the curve
+            const tension = Math.sin(t * 20 + now * 0.005) * Math.cos(t * 33 - now * 0.007) * 1.5;
+            pt.x += tension;
+            pt.y += tension;
+            
+            ctx.lineTo(pt.x, pt.y);
+          }
+          
+          ctx.strokeStyle = `rgba(180, 200, 230, ${lineAlpha * 0.8})`; 
+          ctx.lineWidth = 1.0;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = `rgba(100, 150, 255, ${lineAlpha * 0.4})`;
+          
+          ctx.globalCompositeOperation = 'screen';
+          ctx.stroke();
+          
+          // Render the sensory tip
+          ctx.beginPath();
+          ctx.arc(finalTipX, finalTipY, 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${lineAlpha})`;
+          ctx.shadowBlur = (currentPhase === "RECOILING" && tapFreezeTimer > 0) ? 20 : 6;
+          ctx.shadowColor = `rgba(100, 180, 255, ${lineAlpha})`;
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.shadowBlur = 0;
+        }
+
+        // 3. Render the Glass Distortion (Tap Response)
+        if (currentPhase === "RECOILING" && tapFreezeTimer > 0) {
+          const shockProgress = 1.0 - (tapFreezeTimer / maxTapFreeze); // 0 to 1
+          const shockRadius = 5 + shockProgress * 80;
+          const shockOpacity = (1.0 - Math.pow(shockProgress, 2)) * 0.6;
+          
+          ctx.beginPath();
+          ctx.arc(finalTipX, finalTipY, shockRadius, 0, Math.PI * 2);
+          ctx.lineWidth = 1.5 + (1.0 - shockProgress) * 3;
+          ctx.strokeStyle = `rgba(150, 200, 255, ${shockOpacity})`;
+          ctx.globalCompositeOperation = 'screen';
+          ctx.stroke();
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      }
+      
+      updateDebug(elapsed);
+      requestAnimationFrame(loop);
+    }
+    
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

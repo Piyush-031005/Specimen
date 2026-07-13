@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Doubt: Detached Shadow</title>
+  <style>
+    body { margin: 0; background: #040404; overflow: hidden; cursor: none; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let mx = w/2, my = h/2;
+    let sx = mx, sy = my;
+    window.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+    let time = 0;
+    let nextGlitch = 3.0; // Seconds until first glitch
+
+    // Draw a custom Mac/Windows style cursor polygon
+    function drawCursor(x, y, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 15, y + 15);
+      ctx.lineTo(x + 6, y + 15);
+      ctx.lineTo(x, y + 22);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    let lastFrame = performance.now();
+    function loop(now) {
+      const dt = (now - lastFrame) / 1000;
+      lastFrame = now;
+      time += dt;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Normal shadow physics (follows closely)
+      sx += (mx - sx) * 0.5;
+      sy += (my - sy) * 0.5;
+
+      let shadowOffsetX = 3;
+      let shadowOffsetY = 5;
+
+      // The 1-frame anomaly
+      if (time > nextGlitch && time < nextGlitch + 0.05) {
+        // For exactly 50ms, shadow jumps somewhere else
+        shadowOffsetX = -20;
+        shadowOffsetY = -15;
+      } else if (time >= nextGlitch + 0.05) {
+        nextGlitch = time + 4.0 + Math.random() * 5.0; // Schedule next glitch
+      }
+
+      // Draw shadow
+      drawCursor(sx + shadowOffsetX, sy + shadowOffsetY, 'rgba(255,255,255,0.08)');
+      
+      // Draw actual cursor
+      drawCursor(mx, my, '#ffffff');
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

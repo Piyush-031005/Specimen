@@ -62,6 +62,9 @@ export class CoordinateSystem {
       this._contrastMultiplier = contrastMultiplier || 0.1;
     });
   }
+  
+  get cssWidth() { return this._cssWidth; }
+  get cssHeight() { return this._cssHeight; }
 
   // ─── Core Conversions ─────────────────────────────────────────────────────
 

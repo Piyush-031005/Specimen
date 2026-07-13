@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Pretender (8s Encounter)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #020202;
+      overflow: hidden;
+      cursor: crosshair;
+      font-family: sans-serif;
+    }
+    canvas { display: block; }
+    #debug {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 11px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="debug"></div>
+
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const debug = document.getElementById('debug');
+    
+    let width, height, cx, cy;
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * window.devicePixelRatio;
+      canvas.height = height * window.devicePixelRatio;
+      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+      cx = width / 2;
+      cy = height / 2;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Input state
+    let mouseX = cx;
+    let mouseY = cy;
+    let isMoving = false;
+    let moveTimer = 0;
+    
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      isMoving = true;
+      moveTimer = 0.5; 
+    });
+
+    // 0 = BLIND (Wandering aimlessly)
+    // 1 = SONAR (User clicked, reacting to sound)
+    // 2 = VIOLATION (Tracking silent movement)
+    // 3 = END (Fade to black)
+    let state = 0;
+    let stateTime = 0;
+    let hasLearnedRule = false;
+    
+    // Sonar visual state
+    let clickX = 0;
+    let clickY = 0;
+    let sonarTimer = 0;
+    let sonarActive = false;
+
+    window.addEventListener('mousedown', (e) => {
+      if (state === 0 && globalTime > 2.0) {
+        // User clicks. Organism hears it.
+        state = 1;
+        stateTime = 0;
+        clickX = e.clientX;
+        clickY = e.clientY;
+        sonarTimer = 1.0; 
+        sonarActive = true;
+        hasLearnedRule = true;
+      }
+    });
+
+    const getRootX = () => cx;
+    const getRootY = () => cy + 200;
+
+    // Tendril physics
+    let tipX = getRootX();
+    let tipY = getRootY();
+    let tipVx = 0;
+    let tipVy = 0;
+
+    let globalTime = 0;
+    let lastTime = performance.now();
+
+    function getBezierPoint(t, p0, p1, p2, p3) {
+      const u = 1 - t, tt = t * t, uu = u * u, uuu = uu * u, ttt = tt * t;
+      return {
+        x: uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x,
+        y: uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+      };
+    }
+
+    function loop(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+      globalTime += dt;
+      stateTime += dt;
+
+      if (moveTimer > 0) {
+        moveTimer -= dt;
+      } else {
+        isMoving = false;
+      }
+      if (sonarTimer > 0) {
+        sonarTimer -= dt;
+      } else {
+        sonarActive = false;
+      }
+
+      ctx.fillStyle = '#020202';
+      ctx.fillRect(0, 0, width, height);
+
+      // --- 1. STATE LOGIC ---
+      let intentX = tipX;
+      let intentY = tipY;
+      let stiffness = 30;
+      let damping = 6;
+      let opacity = 1.0;
+
+      if (state === 0) {
+        debug.innerText = "PHASE 0: Blind Wander. Click anywhere to make a sound.";
+        // Wandering completely blind, oblivious to mouse
+        intentX = cx + Math.sin(globalTime * 0.5) * 200 + Math.cos(globalTime * 0.3) * 100;
+        intentY = cy - 50 + Math.cos(globalTime * 0.4) * 100;
+        stiffness = 20;
+        damping = 8;
+        
+        // If they learned the rule, and they move the mouse in silence... VIOLATION
+        if (hasLearnedRule && stateTime > 1.0 && isMoving && !sonarActive) {
+          state = 2; // The Violation
+          stateTime = 0;
+        }
+
+      } else if (state === 1) {
+        debug.innerText = "PHASE 1: Sonar Reaction. It heard you.";
+        // Snaps to click
+        intentX = clickX;
+        intentY = clickY;
+        stiffness = 150; // Fast snap
+        damping = 10;
+        
+        // After 2 seconds of staring at the click location, it gets bored and goes back to wandering
+        if (stateTime > 2.0) {
+          state = 0;
+          stateTime = 0;
+        }
+
+      } else if (state === 2) {
+        debug.innerText = "PHASE 2: The Violation. It is looking right at your silent cursor.";
+        // Directly tracks the silent cursor
+        intentX = mouseX;
+        intentY = mouseY;
+        stiffness = 80; // Deliberate, eerie tracking
+        damping = 12;
+        
+        if (stateTime > 4.0) {
+          state = 3; // Fade out
+          stateTime = 0;
+        }
+
+      } else if (state === 3) {
+        debug.innerText = "PHASE 3: End. Fading to black.";
+        intentX = getRootX();
+        intentY = getRootY();
+        stiffness = 10;
+        damping = 10;
+        opacity = Math.max(0, 1.0 - stateTime / 2.0); // Fade out over 2 seconds
+        
+        if (stateTime > 2.5) {
+          // Restart Experience
+          state = 0;
+          stateTime = 0;
+          globalTime = 0;
+          hasLearnedRule = false;
+        }
+      }
+
+      // Physics integration
+      const ax = (intentX - tipX) * stiffness - tipVx * damping;
+      const ay = (intentY - tipY) * stiffness - tipVy * damping;
+      tipVx += ax * dt;
+      tipVy += ay * dt;
+      tipX += tipVx * dt;
+      tipY += tipVy * dt;
+
+      // Microscopic Tremor
+      const tremorX = Math.sin(now * 0.003) * 1.5;
+      const tremorY = Math.cos(now * 0.004) * 1.5;
+      const finalTipX = tipX + tremorX;
+      const finalTipY = tipY + tremorY;
+
+      // --- 2. RENDER THE SONAR (If active) ---
+      if (sonarActive) {
+        const ringProgress = 1.0 - sonarTimer; // 0 to 1
+        const ringRadius = ringProgress * 300;
+        const ringOpacity = (1.0 - ringProgress) * 0.8;
+        
+        ctx.beginPath();
+        ctx.arc(clickX, clickY, ringRadius, 0, Math.PI * 2);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(100, 150, 255, ${ringOpacity})`;
+        ctx.stroke();
+      }
+
+      // --- 3. RENDER THE ORGANISM ---
+      if (opacity > 0.01) {
+        const rootX = getRootX();
+        const rootY = getRootY();
+
+        // Control points
+        const p0 = { x: rootX, y: rootY };
+        const p1 = { 
+          x: rootX + (finalTipX - rootX) * 0.3 + Math.sin(now * 0.001) * 40, 
+          y: rootY + (finalTipY - rootY) * 0.3 + Math.cos(now * 0.0013) * 40 
+        };
+        const p2 = { 
+          x: rootX + (finalTipX - rootX) * 0.7 + Math.cos(now * 0.0017) * -30, 
+          y: rootY + (finalTipY - rootY) * 0.7 + Math.sin(now * 0.002) * -30 
+        };
+        const p3 = { x: finalTipX, y: finalTipY };
+
+        // Shadow Mass (Follows tip slightly behind)
+        const massX = rootX + (finalTipX - rootX) * 0.8;
+        const massY = rootY + (finalTipY - rootY) * 0.8;
+        const massRadius = 150 + Math.sin(now * 0.002) * 20;
+        
+        const shadowGrad = ctx.createRadialGradient(massX, massY, 0, massX, massY, massRadius);
+        shadowGrad.addColorStop(0, `rgba(15, 20, 30, ${opacity * 0.5})`); 
+        shadowGrad.addColorStop(0.5, `rgba(8, 12, 18, ${opacity * 0.2})`);
+        shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = shadowGrad;
+        ctx.beginPath();
+        ctx.arc(massX, massY, massRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+
+        // Tendril Body
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        
+        const segments = 25;
+        for (let i = 1; i <= segments; i++) {
+          const t = i / segments;
+          const pt = getBezierPoint(t, p0, p1, p2, p3);
+          
+          // Muscle tension kinks
+          const tension = Math.sin(t * 20 + now * 0.005) * Math.cos(t * 33 - now * 0.007) * 2.0;
+          pt.x += tension;
+          pt.y += tension;
+          
+          ctx.lineTo(pt.x, pt.y);
+        }
+        
+        ctx.strokeStyle = `rgba(180, 200, 230, ${opacity * 0.8})`; 
+        ctx.lineWidth = 1.2;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = `rgba(100, 150, 255, ${opacity * 0.5})`;
+        
+        ctx.globalCompositeOperation = 'screen';
+        ctx.stroke();
+        
+        // Tendril Eye / Tip
+        ctx.beginPath();
+        ctx.arc(finalTipX, finalTipY, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = `rgba(100, 180, 255, ${opacity})`;
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.shadowBlur = 0;
+      }
+      
+      requestAnimationFrame(loop);
+    }
+    
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
