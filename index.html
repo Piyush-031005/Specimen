@@ -29,29 +29,23 @@
       body {
         width: 100%;
         height: 100%;
+        margin: 0;
         overflow: hidden;
-        background: #000000;
-        font-family: 'Inter', system-ui, sans-serif;
-        color: #f5f0e8;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        background-color: #050505;
+        transition: background-color 10s ease;
+        font-family: sans-serif;
+        cursor: none;
         user-select: none;
-        -webkit-user-select: none;
         touch-action: none;
       }
 
-      #fossil-canvas, #canvas {
+      #canvas {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
         display: block;
-      }
-      
-      #fossil-canvas {
-        z-index: -2; /* Behind the organism, above background */
-        opacity: 0.6;
       }
 
 
@@ -63,7 +57,7 @@
         z-index: -1; /* Behind the canvas! */
         font-family: 'Cinzel', 'Didot', serif;
         color: rgba(255, 255, 255, 0.04);
-        transition: all 1.0s ease;
+        transition: color 10s ease, opacity 2s ease-in-out;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -151,29 +145,47 @@
     </style>
   </head>
   <body>
-    <canvas id="fossil-canvas" aria-hidden="true"></canvas>
+
     <canvas id="canvas" aria-label="An interactive digital organism" role="img"></canvas>
     
     <!-- AAA EDITORIAL UI (Background) -->
     <div id="specimen-hud">
       <div class="editorial-title">SPECIMEN</div>
-      <div class="editorial-subtitle">OBSERVE</div>
+      <div class="editorial-subtitle">COGNITIVE INTERFACE</div>
       
       <div class="editorial-stats">
-        <div id="hud-level">MUTATION LEVEL: I</div>
-        <div id="hud-temperament">BEHAVIOR: NEUTRAL</div>
+        <div id="hud-level">SHARED UNDERSTANDING: LOW</div>
+        <div id="hud-temperament">TRUST: LOW</div>
       </div>
     </div>
 
     <!-- THE CLIMAX: PSYCHOLOGICAL REPORT -->
     <div id="containment-report">
-      <div class="report-content">
-        <div class="report-line" id="rep-subj">SUBJECT: VISITOR #892</div>
-        <div class="report-line" id="rep-trait">DOMINANT TRAIT: CALCULATING</div>
-        <div class="report-line" id="rep-trust">TRUST ESTABLISHED: 0%</div>
-        <div class="report-line" id="rep-time">OBSERVATION TIME: 00:00</div>
-        <div class="report-climax" id="rep-climax">You came to observe the organism.<br><br>The organism was observing you.</div>
+      <div class="report-content" id="report-content-1">
+        <div class="report-line" id="rep-subj">SITE-07<br>COMMUNICATION ARCHIVE</div>
+        <div class="report-line" id="rep-id">OBSERVER ID: 892</div>
+        <div class="report-line" id="rep-protocol" style="display:none; color:#ff4444;">OBSERVER IGNORED PROTOCOL</div>
+        <div class="report-line" id="rep-trait">DOMINANT RESPONSE: CALCULATING</div>
+        <div class="report-line" id="rep-time">OBSERVATION DURATION: 00:00</div>
+        <div class="report-line" id="rep-stability">PATTERN STABILITY: CONFIRMED</div>
+        <div class="report-line" id="rep-class">CLASSIFICATION: SUITABLE</div>
       </div>
+      <div class="report-content" id="report-content-2" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:100%; text-align:center;">
+        <div class="report-line" id="rep-comm1">COMMUNICATION SUCCESSFUL.</div>
+        <div class="report-line" id="rep-comm2">NO ANOMALIES DETECTED.</div>
+        <div class="report-line" id="rep-comm3">PREPARING ARCHIVAL...</div>
+      </div>
+      <div class="report-content" id="report-content-3" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:100%; text-align:center;">
+        <div class="report-line" id="rep-corr1">CORRECTION.</div>
+        <div class="report-line" id="rep-corr2" style="margin-top:20px;">NO OUTBOUND COMMUNICATION DETECTED.</div>
+        <div class="report-line" id="rep-corr3">INBOUND COMMUNICATION CONFIRMED.</div>
+      </div>
+      <div class="report-content" id="report-content-4" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:100%; text-align:center;">
+        <div class="report-line" id="rep-end1">OBSERVATION COMPLETE.</div>
+        <div class="report-line" id="rep-end2">FUTURE CONTACT UNNECESSARY.</div>
+        <div class="report-line" id="rep-end3" style="margin-top: 40px; font-weight:bold; letter-spacing:8px;">WE REMEMBER YOU.</div>
+      </div>
+      <canvas id="impossible-eye" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:99999; opacity:0; transition:opacity 2s;"></canvas>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -126,6 +126,14 @@ window.addEventListener('keyup', (e) => {
 // Cursor is hidden globally via CSS (cursor:none on body).
 // Entity tracks cursor for CURIOUS state lean (implemented in Entity.js).
 // Signature moment (M8): entity briefly absorbs cursor — no pointer for ~3s.
+window.lastCursorX = window.innerWidth / 2;
+window.lastCursorY = window.innerHeight / 2;
+window.sessionInteractions = 0;
+EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
+    window.lastCursorX = x;
+    window.lastCursorY = y;
+    window.sessionInteractions++;
+});
 
 // ─── Startup Sequence ─────────────────────────────────────────────────────────
 
@@ -135,87 +143,142 @@ const sessionData = memory.load();
 // 2. Renderer init (resize listener, canvas sizing)
 renderer.init();
 
-// Fossil Canvas Init
-const fossilCanvas = document.getElementById('fossil-canvas');
-const fossilCtx = fossilCanvas.getContext('2d');
-function resizeFossilCanvas() {
-    fossilCanvas.width = window.innerWidth;
-    fossilCanvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resizeFossilCanvas);
-resizeFossilCanvas();
-
-// Draw Fossils/Scars on click
-EventBus.on(EVENTS.USER_INPUT, ({ x, y }) => {
-    fossilCtx.beginPath();
-    const radius = Math.random() * 20 + 10;
-    fossilCtx.arc(x, y, radius, 0, Math.PI * 2);
-    fossilCtx.fillStyle = `rgba(${Math.random() > 0.5 ? 255 : 20}, ${Math.random() > 0.5 ? 20 : 200}, ${Math.random() > 0.5 ? 50 : 255}, 0.05)`;
-    fossilCtx.fill();
-    
-    // Draw broken branches (scars)
-    fossilCtx.beginPath();
-    fossilCtx.moveTo(x, y);
-    for (let i = 0; i < 5; i++) {
-        fossilCtx.lineTo(x + (Math.random() * 100 - 50), y + (Math.random() * 100 - 50));
-    }
-    fossilCtx.strokeStyle = `rgba(255, 255, 255, 0.03)`;
-    fossilCtx.lineWidth = 1;
-    fossilCtx.stroke();
-});
-
 // The Climax (Containment Report)
 let climaxTriggered = false;
 EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
+    const body = document.body;
+    const hud = document.getElementById('specimen-hud');
+    
+    // Color Timeline Shifts
+    if (level === 2) {
+        body.style.backgroundColor = '#001a24'; // Cyan tint
+        if (hud) hud.style.color = 'rgba(0, 255, 255, 0.08)';
+    } else if (level === 3) {
+        body.style.backgroundColor = '#1a0500'; // Deep Orange tint
+        if (hud) hud.style.color = 'rgba(255, 60, 0, 0.08)';
+    }
+    
     if (level === 3 && !climaxTriggered) {
         climaxTriggered = true;
         
         // Trigger report after 15 seconds of Level 3
         setTimeout(() => {
             const canvas = document.getElementById('canvas');
-            const hud = document.getElementById('specimen-hud');
-            const fossil = document.getElementById('fossil-canvas');
             
             canvas.style.transition = 'opacity 3s ease';
             canvas.style.opacity = '0';
-            hud.style.opacity = '0';
-            fossil.style.transition = 'opacity 3s ease';
-            fossil.style.opacity = '0';
+            if (hud) hud.style.opacity = '0';
             
             setTimeout(() => {
+                body.style.backgroundColor = '#000000'; // Blackout
                 const report = document.getElementById('containment-report');
                 report.classList.add('visible');
                 
                 const mem = memory.load();
-                const interactions = mem.totalInteractions || 0;
+                const interactions = window.sessionInteractions || 0;
+                
+                // Show "Observer ignored protocol" if they spammed clicks
+                if (interactions > 30) {
+                    const protocolEl = document.getElementById('rep-protocol');
+                    if (protocolEl) protocolEl.style.display = 'block';
+                }
+                
                 let trait = "OBSERVANT";
-                if (interactions > 80) trait = "AGGRESSIVE";
-                else if (interactions < 30) trait = "HESITANT";
-                else trait = "CURIOUS";
+                if (interactions > 30) trait = "RAPID / ERRATIC";
+                else if (interactions < 10) trait = "HESITATION";
+                else trait = "CALCULATING";
                 
-                const trustVal = Math.floor(behavior.trust);
-                
+                // Sequence 1: Archive Report
                 setTimeout(() => { document.getElementById('rep-subj').classList.add('visible'); }, 1000);
+                setTimeout(() => { document.getElementById('rep-id').classList.add('visible'); }, 2000);
                 setTimeout(() => { 
-                    const tr = document.getElementById('rep-trait');
-                    tr.textContent = `DOMINANT TRAIT: ${trait}`;
-                    tr.classList.add('visible'); 
+                    const protocolEl = document.getElementById('rep-protocol');
+                    if (protocolEl && protocolEl.style.display === 'block') protocolEl.classList.add('visible'); 
                 }, 3000);
                 setTimeout(() => { 
-                    const tru = document.getElementById('rep-trust');
-                    tru.textContent = `TRUST ESTABLISHED: ${trustVal}%`;
-                    tru.classList.add('visible'); 
-                }, 5000);
+                    const tr = document.getElementById('rep-trait');
+                    tr.textContent = `DOMINANT RESPONSE: ${trait}`;
+                    tr.classList.add('visible'); 
+                }, 4000);
                 setTimeout(() => { 
                     const ti = document.getElementById('rep-time');
                     const timeAlive = Math.floor(performance.now() / 1000);
                     const m = Math.floor(timeAlive / 60).toString().padStart(2, '0');
                     const s = (timeAlive % 60).toString().padStart(2, '0');
-                    ti.textContent = `OBSERVATION TIME: ${m}:${s}`;
+                    ti.textContent = `OBSERVATION DURATION: ${m}:${s}`;
                     ti.classList.add('visible'); 
-                }, 7000);
+                }, 5000);
+                setTimeout(() => { document.getElementById('rep-stability').classList.add('visible'); }, 6000);
+                setTimeout(() => { document.getElementById('rep-class').classList.add('visible'); }, 7000);
                 
-                setTimeout(() => { document.getElementById('rep-climax').classList.add('visible'); }, 10000);
+                // Sequence 2: Comm Status
+                setTimeout(() => {
+                    document.getElementById('report-content-1').style.opacity = '0';
+                    setTimeout(() => document.getElementById('report-content-1').style.display = 'none', 1000);
+                    document.getElementById('report-content-2').style.display = 'block';
+                    setTimeout(() => document.getElementById('rep-comm1').classList.add('visible'), 1500);
+                    setTimeout(() => document.getElementById('rep-comm2').classList.add('visible'), 3000);
+                    setTimeout(() => document.getElementById('rep-comm3').classList.add('visible'), 5000);
+                }, 13000);
+                
+                // Sequence 3: Correction
+                setTimeout(() => {
+                    document.getElementById('report-content-2').style.opacity = '0';
+                    setTimeout(() => document.getElementById('report-content-2').style.display = 'none', 1000);
+                    document.getElementById('report-content-3').style.display = 'block';
+                    setTimeout(() => document.getElementById('rep-corr1').classList.add('visible'), 2000);
+                    setTimeout(() => document.getElementById('rep-corr2').classList.add('visible'), 5000);
+                    setTimeout(() => document.getElementById('rep-corr3').classList.add('visible'), 8000);
+                }, 23000);
+                
+                // Sequence 4: End
+                setTimeout(() => {
+                    document.getElementById('report-content-3').style.opacity = '0';
+                    setTimeout(() => document.getElementById('report-content-3').style.display = 'none', 1000);
+                    document.getElementById('report-content-4').style.display = 'block';
+                    setTimeout(() => document.getElementById('rep-end1').classList.add('visible'), 1000);
+                    setTimeout(() => document.getElementById('rep-end2').classList.add('visible'), 3000);
+                    setTimeout(() => document.getElementById('rep-end3').classList.add('visible'), 7000);
+                }, 35000);
+                
+                // Sequence 5: Blackout & Impossible Eye
+                setTimeout(() => {
+                    document.getElementById('report-content-4').style.opacity = '0';
+                    setTimeout(() => document.getElementById('report-content-4').style.display = 'none', 1000);
+                    
+                    // Draw Impossible Eye exactly at last cursor position
+                    const eyeCanvas = document.getElementById('impossible-eye');
+                    if (eyeCanvas) {
+                        eyeCanvas.width = window.innerWidth;
+                        eyeCanvas.height = window.innerHeight;
+                        eyeCanvas.style.opacity = '1';
+                        
+                        const ctx = eyeCanvas.getContext('2d');
+                        ctx.strokeStyle = '#33ccff';
+                        ctx.lineWidth = 1;
+                        ctx.shadowBlur = 15;
+                        ctx.shadowColor = '#33ccff';
+                        
+                        // Use memory cursor, or fallback to center
+                        const mx = (window.lastCursorX !== undefined) ? window.lastCursorX : window.innerWidth / 2;
+                        const my = (window.lastCursorY !== undefined) ? window.lastCursorY : window.innerHeight / 2;
+                        
+                        // 4 fibers
+                        ctx.beginPath(); ctx.moveTo(mx - 15, my - 20); ctx.lineTo(mx - 2, my + 20); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(mx + 15, my - 20); ctx.lineTo(mx + 2, my + 20); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(mx - 5, my - 22); ctx.lineTo(mx + 4, my + 18); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(mx + 5, my - 18); ctx.lineTo(mx - 4, my + 22); ctx.stroke();
+                        
+                        // Session Terminated text
+                        setTimeout(() => {
+                            ctx.font = '14px "IBM Plex Mono", monospace';
+                            ctx.fillStyle = '#ff3333';
+                            ctx.textAlign = 'center';
+                            ctx.shadowBlur = 0;
+                            ctx.fillText("Session terminated.", mx, my + 60);
+                        }, 3000);
+                    }
+                }, 47000);
                 
             }, 3000);
             
