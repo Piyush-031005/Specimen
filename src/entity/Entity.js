@@ -178,14 +178,6 @@ export class Entity {
     EventBus.on('ASSIMILATE_UI', ({ text }) => {
         this.assimilateUI(text);
     });
-  }
-
-  // UI Assimilation hook
-  assimilateUI(text) {
-      if (this._swarmSystem) {
-          this._swarmSystem.assimilateDOM(text);
-      }
-  }  
     
     // Add eat delay to prevent multiple triggers in one frame
     this._eatCooldown = 0;
@@ -193,6 +185,13 @@ export class Entity {
     EventBus.on(EVENTS.RENDER_TICK, (tickData) => {
       this._onTick(tickData);
     });
+  }
+
+  // UI Assimilation hook
+  assimilateUI(text) {
+      if (this._swarmSystem) {
+          this._swarmSystem.assimilateDOM(text);
+      }
   }
 
   /**
