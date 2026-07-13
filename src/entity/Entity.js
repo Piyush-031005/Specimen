@@ -30,6 +30,7 @@ import { EVENTS, BEHAVIOR_STATES, TIMING, REALITY_LAWS } from '../constants.js';
 import { Geometry } from './Geometry.js';
 import { EntityAnimator } from './EntityAnimator.js';
 import { FiberSystem } from './FiberSystem.js';
+import { SwarmSystem } from './SwarmSystem.js';
 import { lerp, smootherstep } from '../utils/MathUtils.js';
 
 export class Entity {
@@ -80,7 +81,10 @@ export class Entity {
     // ─── Systems ──────────────────────────────────────────────────────────
     this._geometry = new Geometry(coords);
     this._fiberSystem = new FiberSystem(coords, memory);
+    this._swarmSystem = new SwarmSystem();
     this._animator = new EntityAnimator(this._state, this._fiberSystem);
+
+    this._mouseVelocity = 0;
 
     // ─── Cursor tracking (for Curious state lean) ─────────────────────────
     /** @type {{ wx: number, wy: number }} Cursor in world space */
@@ -116,6 +120,21 @@ export class Entity {
 
     EventBus.on(EVENTS.USER_INPUT, ({ x, y, type }) => {
       const { wx, wy } = coords.screenToWorld(x, y);
+      
+      const dx = wx - this._cursorWorld.wx;
+      const dy = wy - this._cursorWorld.wy;
+      const dist = Math.hypot(dx, dy);
+      
+      if (type === 'pointermove') {
+          // Multiply by something to make it a recognizable velocity scale
+          this._mouseVelocity += dist * 10;
+          if (this._mouseVelocity > 500 && this._state.evolutionLevel >= 2) {
+              if (this._swarmSystem && !this._swarmSystem.isActive) {
+                  this._swarmSystem.shatter(coords.getCenterX(), coords.getCenterY());
+              }
+          }
+      }
+      
       this._cursorWorld.wx = wx;
       this._cursorWorld.wy = wy;
       this._lastInputTime = performance.now();
@@ -155,6 +174,18 @@ export class Entity {
       this._state.pluckPhase = 'idle';
       this._fiberSystem.resetUnravel();
     });
+    
+    EventBus.on('ASSIMILATE_UI', ({ text }) => {
+        this.assimilateUI(text);
+    });
+  }
+
+  // UI Assimilation hook
+  assimilateUI(text) {
+      if (this._swarmSystem) {
+          this._swarmSystem.assimilateDOM(text);
+      }
+  }  
     
     // Add eat delay to prevent multiple triggers in one frame
     this._eatCooldown = 0;
@@ -206,6 +237,15 @@ export class Entity {
 
     // Cursor lean: in Curious state, entity drifts slightly toward cursor
     this._updateCursorLean(deltaSeconds);
+    
+    // Decay mouse velocity
+    if (this._mouseVelocity > 0) {
+        this._mouseVelocity *= 0.95;
+    }
+    // If mouse is still, reform the swarm
+    if (this._mouseVelocity < 5 && this._swarmSystem && this._swarmSystem.isActive && !this._swarmSystem.isReforming) {
+        this._swarmSystem.reform();
+    }
     
     // HMR / State Recovery Failsafe: Nuke all NaNs!
     const sanitize = (val) => (val === undefined || isNaN(val) || !isFinite(val)) ? 0 : val;
@@ -279,6 +319,13 @@ export class Entity {
     const idleMs = this._lastInputTime ? (performance.now() - this._lastInputTime) : 0;
     const isCursorStill = (idleMs > 2000 && this._lastInputTime !== null);
 
+    // Update Swarm System Physics
+    if (this._swarmSystem) {
+        // Pass the actual screen target for the swarm
+        const targetScreen = this._coords.worldToScreen(this._cursorWorld.wx, this._cursorWorld.wy);
+        this._swarmSystem.update(targetScreen.x, targetScreen.y);
+    }
+
     // Update fiber physics - subtract offsetX so the translated canvas doesn't double the distance to the mouse
     this._fiberSystem.update(
       deltaSeconds, this._state.isUnraveled, targetScreenCp.x - offsetX, targetScreenCp.y - offsetY, 
@@ -294,32 +341,45 @@ export class Entity {
       ctx.translate(offsetX, offsetY);
     }
 
+    // Fade out fibers if swarm is active
+    let fiberOpacity = this._state.masterOpacity;
+    if (this._swarmSystem && (this._swarmSystem.isActive || this._swarmSystem.opacity > 0)) {
+        fiberOpacity = Math.max(0, this._state.masterOpacity - this._swarmSystem.opacity);
+    }
+
     // DRAW THE ORGANISM (Sentient Fibers)
-    this._fiberSystem.render(
-      ctx,
-      this._state.masterOpacity,
-      baseCx,
-      baseCy,
-      this._animator._introState,
-      this._animator._temperament,
-      this._state.standoffIntensity,
-      this._state.standoffContext
-    );
+    if (fiberOpacity > 0) {
+        this._fiberSystem.render(
+          ctx,
+          fiberOpacity,
+          baseCx,
+          baseCy,
+          this._animator._introState,
+          this._animator._temperament,
+          this._state.standoffIntensity,
+          this._state.standoffContext
+        );
+    }
 
     // RESTORE CONTEXT
     if (offsetX !== 0 || offsetY !== 0) {
       ctx.restore();
     }
 
+    // DRAW SWARM SYSTEM (World Space absolute coordinates)
+    if (this._swarmSystem && (this._swarmSystem.isActive || this._swarmSystem.opacity > 0)) {
+        this._swarmSystem.draw(ctx);
+    }
+
     const timeSinceBirth = this._birthTime ? (performance.now() - this._birthTime) / 1000 : 0;
 
     // Draw rigid geometry (Disabled by default in constants)
-    if (REALITY_LAWS.IS_ORGANISM_VISIBLE) {
+    if (REALITY_LAWS.IS_ORGANISM_VISIBLE && fiberOpacity > 0) {
       this._geometry.render(
         ctx,
         this._state.outerRotation,
         this._state.innerRotation,
-        this._state.masterOpacity,
+        fiberOpacity,
         this._state.breathScale,
         this._state.behaviorState,
         this._worldStage,

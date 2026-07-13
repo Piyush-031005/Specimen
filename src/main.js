@@ -153,10 +153,12 @@ EventBus.on('ORGANISM_EVOLVED', ({ level }) => {
     if (level === 2) {
         body.style.backgroundColor = '#001a24'; // Cyan tint
         if (hud) {
-            hud.style.color = 'rgba(0, 255, 255, 0.08)';
-            hud.style.filter = 'blur(1px)';
-            hud.style.transform = 'scale(1.02)';
+            hud.style.color = 'rgba(0, 255, 255, 0)'; // Hide original text
+            hud.style.textShadow = 'none';
         }
+        // Tell Entity to extract the text pixels and swarm them
+        EventBus.emit('ASSIMILATE_UI', { text: 'SPECIMEN' });
+        
     } else if (level === 3) {
         // NEGATIVE SPACE INVERSION (Color Contrast Shock)
         body.style.backgroundColor = '#ffffff'; // Blinding White
